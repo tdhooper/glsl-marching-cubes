@@ -1,0 +1,30 @@
+{
+  "name": "glsl-cubemarch",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/index.js",
+  "scripts": {
+    "build": "browserify src/index.js -o build/index.js",
+    "watch": "watchify src/index.js -o build/index.js",
+    "test": "PATH=$(npm bin):$PATH glslify src/shaders/test/tests.glsl | glsl-testify | tap-spec"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "a-big-triangle": "^1.0.2",
+    "glsl-parser": "^2.0.0",
+    "glsl-read-float": "^1.1.0",
+    "glsl-testify": "^1.0.0",
+    "glsl-tokenizer": "^2.0.2",
+    "glslify": "^5.0.2",
+    "ramda": "^0.19.1",
+    "tap-spec": "^4.1.1",
+    "three": "^0.73.0",
+    "three.trackball": "0.0.1"
+  },
+  "browserify": {
+    "transform": [
+      "glslify"
+    ]
+  }
+}
