@@ -52129,10 +52129,11 @@ define("build/js/twgl-includer-full", function(){});
 },{}],6:[function(require,module,exports){
 "use strict";
 
-
 var twgl = require("twgl.js");
+
+var Scene = require('./scene');
 var R = require('ramda');
-var unpackFloat = require("glsl-read-float")
+var unpackFloat = require("glsl-read-float");
 
 var edgeTable = [
     0x0  , 0x109, 0x203, 0x30a, 0x406, 0x50f, 0x605, 0x70c,
@@ -52227,57 +52228,61 @@ var addLookupTexture = function(name, gl, uniforms, table) {
 
 var CubeMarch = function() {
 
-    var canvas = document.createElement('canvas');
-    document.body.appendChild(canvas);
-    var gl = twgl.getWebGLContext(canvas);
-    var programInfo = twgl.createProgramInfo(gl, [
-        "#define GLSLIFY 1\nattribute vec3 position;\n\nvoid main() {\n    gl_Position = vec4(position, 1.0);\n}\n",
-        "#define GLSLIFY 1\nprecision mediump float;\n\nint coordToIndex(vec2 coord, vec2 size) {\n    return int(\n        floor(coord.x) + (floor(coord.y) * size.x)\n    );\n}\n\nint unpackUint(vec4 values) {\n    float result = 0.;\n    result += values.x * pow(256., 0.);\n    result += values.y * pow(256., 1.);\n    result += values.z * pow(256., 2.);\n    result += values.w * pow(256., 3.);\n    return int(result);\n}\n\nconst int OR_LENGTH_1117569599 = 15;\n\nint or(int a, int b) {\n    int result = 0;\n    float bitA;\n    float bitB;\n    int bit;\n    for (int i = 0; i < OR_LENGTH_1117569599; i++) {\n        bitA = mod(float(a), 2.);\n        bitB = mod(float(b), 2.);\n        a = a / 2;\n        b = b / 2;\n        bit = int(ceil((bitA + bitB) / 2.));\n        result += bit * int(pow(2., float(i)));\n    }\n    return result;\n}\n\nconst int AND_LENGTH_2281831123 = 15;\n\nint and(int a, int b) {\n    int result = 0;\n    float bitA;\n    float bitB;\n    int bit;\n    for (int i = 0; i < AND_LENGTH_2281831123; i++) {\n        bitA = mod(float(a), 2.);\n        bitB = mod(float(b), 2.);\n        a = a / 2;\n        b = b / 2;\n        bit = int(floor((bitA + bitB) / 2.));\n        result += bit * int(pow(2., float(i)));\n    }\n    return result;\n}\n\nint shiftLeft(int n, int shift) {\n    return n *= int(pow(float(2), float(shift)));\n}\n\n#define FLOAT_MAX  1.70141184e38\n#define FLOAT_MIN  1.17549435e-38\n\nlowp vec4 encode_float_1062606552(highp float v) {\n  highp float av = abs(v);\n\n  //Handle special cases\n  if(av < FLOAT_MIN) {\n    return vec4(0.0, 0.0, 0.0, 0.0);\n  } else if(v > FLOAT_MAX) {\n    return vec4(127.0, 128.0, 0.0, 0.0) / 255.0;\n  } else if(v < -FLOAT_MAX) {\n    return vec4(255.0, 128.0, 0.0, 0.0) / 255.0;\n  }\n\n  highp vec4 c = vec4(0,0,0,0);\n\n  //Compute exponent and mantissa\n  highp float e = floor(log2(av));\n  highp float m = av * pow(2.0, -e) - 1.0;\n  \n  //Unpack mantissa\n  c[1] = floor(128.0 * m);\n  m -= c[1] / 128.0;\n  c[2] = floor(32768.0 * m);\n  m -= c[2] / 32768.0;\n  c[3] = floor(8388608.0 * m);\n  \n  //Unpack exponent\n  highp float ebias = e + 127.0;\n  c[0] = floor(ebias / 2.0);\n  ebias -= c[0] * 2.0;\n  c[1] += floor(ebias) * 128.0; \n\n  //Unpack sign bit\n  c[0] += 128.0 * step(0.0, -v);\n\n  //Scale back to range\n  return c / 255.0;\n}\n\nuniform vec2 resolution;\nuniform sampler2D edgeTable;\nuniform sampler2D edgeIndicesTable;\nuniform sampler2D cubeVertsTable;\nuniform int edgeTable_size;\nuniform int edgeIndicesTable_size;\nuniform int cubeVertsTable_size;\n\nuniform vec3 boundsA;\nuniform vec3 boundsB;\nuniform vec3 dims;\n\nconst int VERTEX_COUNT = 8;\nconst int EDGE_COUNT = 12;\n\nvec3 scale = (boundsB - boundsA) / dims;\nvec3 shift = boundsA;\n\nfloat map(vec3 p) {\n    return length(p) - .5;\n}\n\nint lookup(sampler2D table, int index, int size) {\n    vec2 uv = vec2(0, float(index) / float(size - 1));\n    vec4 tex = texture2D(table, uv) * 256.;\n    return unpackUint(tex);\n}\n\nvec3 lookupVertexCoord(int i) {\n    return vec3(\n        lookup(cubeVertsTable, i * 3, cubeVertsTable_size),\n        lookup(cubeVertsTable, i * 3 + 1, cubeVertsTable_size),\n        lookup(cubeVertsTable, i * 3 + 2, cubeVertsTable_size)\n    );\n}\n\nvec3 vertexPosition(vec3 cube, int vertex) {\n    vec3 v = lookupVertexCoord(vertex);\n    return scale * (cube + v) + shift; \n}\n\nfloat potentialAtVertex(vec3 cube, int vertex) {\n    return map(vertexPosition(cube, vertex));\n}\n\nfloat getComponent(vec3 value) {\n    int xyz = coordToIndex(gl_FragCoord.xy, resolution.xy);\n    xyz = int(mod(float(xyz), 3.));\n    if (xyz == 0) {\n        return value.x;\n    }\n    if (xyz == 1) {\n        return value.y;\n    }\n    if (xyz == 2) {\n        return value.z;\n    }\n}\n\nvoid main() {\n    float cubeIndex = float(coordToIndex(gl_FragCoord.xy, resolution.xy));\n    cubeIndex = floor(cubeIndex / float(EDGE_COUNT) / 3.); // do for each edge, for x, y, and z\n\n    vec3 dims2 = dims - vec3(1);\n\n    if (cubeIndex >= dims2.x * dims2.y * dims2.z) {\n        gl_FragColor = vec4(1);\n        return;\n    }\n\n    vec3 cube = vec3(0);\n    cube.z = mod(cubeIndex, dims2.z);\n    cube.y = mod(floor(cubeIndex / dims2.z), dims2.y);\n    cube.x = mod(floor(cubeIndex / (dims2.y * dims2.z)), dims2.x);\n\n    cube.xyz = cube.zxy;\n\n    int edgeTableIndex = 0;\n    int newIndex;\n    float s;\n    for (int i = 0; i < VERTEX_COUNT; i++) {\n        s = potentialAtVertex(cube, i);\n        newIndex = 0;\n        if (s > 0.) {\n            newIndex = shiftLeft(1, i);\n        }\n        edgeTableIndex = or(edgeTableIndex, newIndex);\n    }\n\n    int edge_mask = lookup(edgeTable, edgeTableIndex, edgeTable_size);\n\n    if (edge_mask == 0) {\n        gl_FragColor = vec4(1);\n        return;\n    }\n\n    float ei = float(coordToIndex(gl_FragCoord.xy, resolution.xy));\n    ei = floor(ei / 3.); // do for x, y, and z\n    int edgeIndex = int(mod(ei, float(EDGE_COUNT)));\n\n    if (( and(edge_mask, shiftLeft(1, edgeIndex)) ) == 0) {\n        gl_FragColor = vec4(1);\n        return;\n    }\n\n    int vertIndexA = lookup(edgeIndicesTable, edgeIndex * 2, edgeIndicesTable_size);\n    int vertIndexB = lookup(edgeIndicesTable, edgeIndex * 2 + 1, edgeIndicesTable_size);\n    vec3 p0 = vec3(\n        lookup(cubeVertsTable, vertIndexA * 3, cubeVertsTable_size),\n        lookup(cubeVertsTable, vertIndexA * 3 + 1, cubeVertsTable_size),\n        lookup(cubeVertsTable, vertIndexA * 3 + 2, cubeVertsTable_size)\n    );\n    vec3 p1 = vec3(\n        lookup(cubeVertsTable, vertIndexB * 3, cubeVertsTable_size),\n        lookup(cubeVertsTable, vertIndexB * 3 + 1, cubeVertsTable_size),\n        lookup(cubeVertsTable, vertIndexB * 3 + 2, cubeVertsTable_size)\n    );\n\n    float a = potentialAtVertex(cube, vertIndexA);\n    float b = potentialAtVertex(cube, vertIndexB);\n    float d = a - b;\n    float t = 0.;\n    if (abs(d) > 1e-6) {\n        t = a / d;\n    }\n\n    vec3 value = scale * ( (cube + p0) + t * (p1 - p0) ) + shift;\n\n    gl_FragColor = encode_float_1062606552(getComponent(value));\n}\n"
-    ]);
+    var size = 256;
+    var scene = new Scene(size, size);
 
-    var arrays = {
-      position: [-1, -1, 0, 1, -1, 0, -1, 1, 0, -1, 1, 0, 1, -1, 0, 1, 1, 0],
-    };
-    var bufferInfo = twgl.createBufferInfoFromArrays(gl, arrays);
+    var uniforms = {};
+    addLookupTexture('edgeTable', scene.gl, uniforms, edgeTable);
+    addLookupTexture('edgeIndicesTable', scene.gl, uniforms, edgeIndices);
+    addLookupTexture('cubeVertsTable', scene.gl, uniforms, cubeVerts);
 
-    gl.canvas.width = gl.canvas.height = 256;
-    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+    this.buffer = scene.createBuffer();
 
-    var uniforms = {
-        resolution: [gl.canvas.width, gl.canvas.height],
-    };
-
-    addLookupTexture('edgeTable', gl, uniforms, edgeTable);
-    addLookupTexture('edgeIndicesTable', gl, uniforms, edgeIndices);
-    addLookupTexture('cubeVertsTable', gl, uniforms, cubeVerts);
-
-    gl.useProgram(programInfo.program);
-    twgl.setBuffersAndAttributes(gl, programInfo, bufferInfo);
-
-    this.gl = gl;
+    this.scene = scene;
+    this.gl = scene.gl;
     this.uniforms = uniforms;
-    this.programInfo = programInfo;
-    this.bufferInfo = bufferInfo;
 };
 
 CubeMarch.prototype.march = function(dims, bounds) {
 
+    var scene = this.scene;
     var gl = this.gl;
     var uniforms = this.uniforms;
+    var buffer = this.buffer;
 
-    this.uniforms.boundsA = bounds[0];
-    this.uniforms.boundsB = bounds[1];
-    this.uniforms.dims = dims;
+    uniforms.boundsA = bounds[0];
+    uniforms.boundsB = bounds[1];
+    uniforms.dims = dims;
 
-    twgl.setUniforms(this.programInfo, uniforms);
-    twgl.drawBufferInfo(this.gl, gl.TRIANGLES, this.bufferInfo);
+    var verticesProg = scene.createProgramInfo(
+        "#define GLSLIFY 1\nattribute vec3 position;\n\nvoid main() {\n    gl_Position = vec4(position, 1.0);\n}\n",
+        "#define GLSLIFY 1\nprecision mediump float;\n\nfloat map(vec3 p) {\n    return length(p) - .5;\n}\n\nint unpackUint(vec4 values) {\n    float result = 0.;\n    result += values.x * pow(256., 0.);\n    result += values.y * pow(256., 1.);\n    result += values.z * pow(256., 2.);\n    result += values.w * pow(256., 3.);\n    return int(result);\n}\n\nint lookup(sampler2D table, int index, int size) {\n    vec2 uv = vec2(0, float(index) / float(size - 1));\n    vec4 tex = texture2D(table, uv) * 256.;\n    return unpackUint(tex);\n}\n\nvec3 lookupVertexCoord(int i, sampler2D cubeVertsTable, int cubeVertsTable_size) {\n    return vec3(\n        lookup(cubeVertsTable, i * 3, cubeVertsTable_size),\n        lookup(cubeVertsTable, i * 3 + 1, cubeVertsTable_size),\n        lookup(cubeVertsTable, i * 3 + 2, cubeVertsTable_size)\n    );\n}\n\nvec3 vertexPosition(\n    vec3 cube,\n    int vertex,\n    sampler2D cubeVertsTable,\n    int cubeVertsTable_size,\n    vec3 scale,\n    vec3 shift\n) {\n    vec3 v = lookupVertexCoord(vertex, cubeVertsTable, cubeVertsTable_size);\n    return scale * (cube + v) + shift; \n}\n\nfloat potentialAtVertex(\n    vec3 cube,\n    int vertex,\n    sampler2D cubeVertsTable,\n    int cubeVertsTable_size,\n    vec3 scale,\n    vec3 shift\n) {\n    vec3 pos = vertexPosition(cube, vertex, cubeVertsTable, cubeVertsTable_size, scale, shift);\n    return map(pos);\n}\n\nint coordToIndex(vec2 coord, vec2 size) {\n    return int(\n        floor(coord.x) + (floor(coord.y) * size.x)\n    );\n}\n\nconst int OR_LENGTH_529295689 = 15;\n\nint or(int a, int b) {\n    int result = 0;\n    float bitA;\n    float bitB;\n    int bit;\n    for (int i = 0; i < OR_LENGTH_529295689; i++) {\n        bitA = mod(float(a), 2.);\n        bitB = mod(float(b), 2.);\n        a = a / 2;\n        b = b / 2;\n        bit = int(ceil((bitA + bitB) / 2.));\n        result += bit * int(pow(2., float(i)));\n    }\n    return result;\n}\n\nint shiftLeft(int n, int shift) {\n    return n *= int(pow(float(2), float(shift)));\n}\n\nconst int VERTEX_COUNT_870892966 = 8;\n\nint getLookupTableIndex(\n    vec3 cube,\n    sampler2D cubeVertsTable,\n    int cubeVertsTable_size,\n    vec3 scale,\n    vec3 shift\n) {\n    int index = 0;\n    int newIndex;\n    float s;\n    for (int i = 0; i < VERTEX_COUNT_870892966; i++) {\n        s = potentialAtVertex(cube, i, cubeVertsTable, cubeVertsTable_size, scale, shift);\n        newIndex = 0;\n        if (s > 0.) {\n            newIndex = shiftLeft(1, i);\n        }\n        index = or(index, newIndex);\n    }\n    return index;\n}\n\nconst int AND_LENGTH_1604150559 = 15;\n\nint and(int a, int b) {\n    int result = 0;\n    float bitA;\n    float bitB;\n    int bit;\n    for (int i = 0; i < AND_LENGTH_1604150559; i++) {\n        bitA = mod(float(a), 2.);\n        bitB = mod(float(b), 2.);\n        a = a / 2;\n        b = b / 2;\n        bit = int(floor((bitA + bitB) / 2.));\n        result += bit * int(pow(2., float(i)));\n    }\n    return result;\n}\n\n#define FLOAT_MAX  1.70141184e38\n#define FLOAT_MIN  1.17549435e-38\n\nlowp vec4 encode_float_2315452051(highp float v) {\n  highp float av = abs(v);\n\n  //Handle special cases\n  if(av < FLOAT_MIN) {\n    return vec4(0.0, 0.0, 0.0, 0.0);\n  } else if(v > FLOAT_MAX) {\n    return vec4(127.0, 128.0, 0.0, 0.0) / 255.0;\n  } else if(v < -FLOAT_MAX) {\n    return vec4(255.0, 128.0, 0.0, 0.0) / 255.0;\n  }\n\n  highp vec4 c = vec4(0,0,0,0);\n\n  //Compute exponent and mantissa\n  highp float e = floor(log2(av));\n  highp float m = av * pow(2.0, -e) - 1.0;\n  \n  //Unpack mantissa\n  c[1] = floor(128.0 * m);\n  m -= c[1] / 128.0;\n  c[2] = floor(32768.0 * m);\n  m -= c[2] / 32768.0;\n  c[3] = floor(8388608.0 * m);\n  \n  //Unpack exponent\n  highp float ebias = e + 127.0;\n  c[0] = floor(ebias / 2.0);\n  ebias -= c[0] * 2.0;\n  c[1] += floor(ebias) * 128.0; \n\n  //Unpack sign bit\n  c[0] += 128.0 * step(0.0, -v);\n\n  //Scale back to range\n  return c / 255.0;\n}\n\nuniform vec2 resolution;\nuniform sampler2D edgeTable;\nuniform sampler2D edgeIndicesTable;\nuniform sampler2D cubeVertsTable;\nuniform int edgeTable_size;\nuniform int edgeIndicesTable_size;\nuniform int cubeVertsTable_size;\n\nuniform vec3 boundsA;\nuniform vec3 boundsB;\nuniform vec3 dims;\n\nconst int EDGE_COUNT = 12;\n\nvec3 scale = (boundsB - boundsA) / dims;\nvec3 shift = boundsA;\n\nfloat getComponent(vec3 value) {\n    int xyz = coordToIndex(gl_FragCoord.xy, resolution.xy);\n    xyz = int(mod(float(xyz), 3.));\n    if (xyz == 0) {\n        return value.x;\n    }\n    if (xyz == 1) {\n        return value.y;\n    }\n    if (xyz == 2) {\n        return value.z;\n    }\n}\n\nfloat getCubeIndex() {\n    float index = float(coordToIndex(gl_FragCoord.xy, resolution.xy));\n    index = floor(index / float(EDGE_COUNT) / 3.); // do for each edge, for x, y, and z\n    vec3 dims2 = dims - vec3(1);\n    if (index >= dims2.x * dims2.y * dims2.z) {\n        return -1.;\n    }\n    return index;\n}\n\nvec3 getCube(float index) {\n    vec3 dims2 = dims - vec3(1);\n    vec3 cube = vec3(0);\n    cube.z = mod(index, dims2.z);\n    cube.y = mod(floor(index / dims2.z), dims2.y);\n    cube.x = mod(floor(index / (dims2.y * dims2.z)), dims2.x);\n    cube.xyz = cube.zxy;\n    return cube;\n}\n\nvoid main() {\n    float cubeIndex = getCubeIndex();\n\n    if (cubeIndex < 0.) {\n        gl_FragColor = vec4(1);\n        return;\n    }\n\n    vec3 cube = getCube(cubeIndex);\n    int lookupIndex = getLookupTableIndex(cube, cubeVertsTable, cubeVertsTable_size, scale, shift);\n    int edge_mask = lookup(edgeTable, lookupIndex, edgeTable_size);\n\n    if (edge_mask == 0) {\n        // split here to reduce num pixels read\n        // gl_FragColor = vec4(1,0,0,1);\n        gl_FragColor = vec4(1);\n        return;\n    }\n\n    float ei = float(coordToIndex(gl_FragCoord.xy, resolution.xy));\n    ei = floor(ei / 3.); // do for x, y, and z\n    int edgeIndex = int(mod(ei, float(EDGE_COUNT)));\n\n    if (( and(edge_mask, shiftLeft(1, edgeIndex)) ) == 0) {\n        gl_FragColor = vec4(1);\n        return;\n    }\n\n    int vertIndexA = lookup(edgeIndicesTable, edgeIndex * 2, edgeIndicesTable_size);\n    int vertIndexB = lookup(edgeIndicesTable, edgeIndex * 2 + 1, edgeIndicesTable_size);\n    vec3 p0 = vec3(\n        lookup(cubeVertsTable, vertIndexA * 3, cubeVertsTable_size),\n        lookup(cubeVertsTable, vertIndexA * 3 + 1, cubeVertsTable_size),\n        lookup(cubeVertsTable, vertIndexA * 3 + 2, cubeVertsTable_size)\n    );\n    vec3 p1 = vec3(\n        lookup(cubeVertsTable, vertIndexB * 3, cubeVertsTable_size),\n        lookup(cubeVertsTable, vertIndexB * 3 + 1, cubeVertsTable_size),\n        lookup(cubeVertsTable, vertIndexB * 3 + 2, cubeVertsTable_size)\n    );\n\n    float a = potentialAtVertex(cube, vertIndexA, cubeVertsTable, cubeVertsTable_size, scale, shift);\n    float b = potentialAtVertex(cube, vertIndexB, cubeVertsTable, cubeVertsTable_size, scale, shift);\n    float d = a - b;\n    float t = 0.;\n    if (abs(d) > 1e-6) {\n        t = a / d;\n    }\n\n    vec3 value = scale * ( (cube + p0) + t * (p1 - p0) ) + shift;\n\n    gl_FragColor = encode_float_2315452051(getComponent(value));\n}\n\n      //var f = triTable[lookupIndex];\n      // offset = cubeIndex * EDGE_COUNT * 3\n      // for(var i=0; i<f.length; i += 3) {\n      // faces.push([\n      //   offset + f[i],\n      //   offset + f[i+1],\n      //   offset + f[i+2]\n      // ]);\n      // }\n\n"
+    );
+
+    var trianglesProg = scene.createProgramInfo(
+        "#define GLSLIFY 1\nattribute vec3 position;\n\nvoid main() {\n    gl_Position = vec4(position, 1.0);\n}\n",
+        "#define GLSLIFY 1\nprecision mediump float;\n\nuniform vec2 resolution;\nuniform sampler2D vertices;\n\nvoid main() {\n    vec2 uv = gl_FragCoord.xy / resolution;\n    vec4 origin = texture2D( vertices, uv );\n    gl_FragColor = origin;\n}\n"
+    );
+
+    scene.draw({
+        program: verticesProg,
+        uniforms: uniforms,
+        output: buffer
+    });
+
+    scene.draw({
+        program: trianglesProg,
+        uniforms: uniforms,
+        inputs: {
+            vertices: buffer
+        }
+    });
 
     var pixels = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
     gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
     var pointCount = uniforms.dims[0] * uniforms.dims[1] * uniforms.dims[2] * 12 * 3;
     var r, g, b, a;
     var points = [];
-    // return points;
 
     var pointIndex = 0;
     for (var i = 0; i < pointCount; i++) {
@@ -52301,7 +52306,7 @@ CubeMarch.prototype.march = function(dims, bounds) {
 
 module.exports = CubeMarch;
 
-},{"glsl-read-float":1,"ramda":2,"twgl.js":5}],7:[function(require,module,exports){
+},{"./scene":8,"glsl-read-float":1,"ramda":2,"twgl.js":5}],7:[function(require,module,exports){
 "use strict";
 
 var CubeMarch = require("./cubemarch");
@@ -52314,8 +52319,10 @@ var bounds = [
     [-1, -1, -1],
     [1, 1, 1]
 ];
+console.time("march");
 var cubeMarch = new CubeMarch();
 var points = cubeMarch.march(dims, bounds);
+console.timeEnd("march");
 // console.log(points)
 // points.forEach(function(point) {
 //     console.log(point);
@@ -52439,4 +52446,103 @@ restoreControls()
 animate();
 
 
-},{"./cubemarch":6,"three":4,"three.trackball":3}]},{},[7]);
+},{"./cubemarch":6,"three":4,"three.trackball":3}],8:[function(require,module,exports){
+"use strict";
+
+var twgl = require("twgl.js");
+
+var Scene = function(width, height) {
+    this.canvas = document.createElement('canvas');
+    document.body.appendChild(this.canvas);
+
+    this.gl = twgl.getWebGLContext(this.canvas);
+
+    var arrays = {
+        position: [-1, -1, 0, 1, -1, 0, -1, 1, 0, -1, 1, 0, 1, -1, 0, 1, 1, 0],
+    };
+    this.bufferInfo = twgl.createBufferInfoFromArrays(this.gl, arrays);
+
+    this.fbi = twgl.createFramebufferInfo(this.gl);
+    
+    this.width = width;
+    this.height = height;
+    this.gl.canvas.width = this.width;
+    this.gl.canvas.height = this.height;
+    this.gl.viewport(0, 0, this.width, this.height);
+}
+
+Scene.prototype.createBuffer = function(width, height) {
+    width = width || this.width;
+    height = height || this.height;
+    var attachments = [
+        {
+            format: this.gl.RGBA,
+            type: this.gl.UNSIGNED_BYTE,
+            min: this.gl.LINEAR,
+            mag: this.gl.LINEAR,
+            wrap: this.gl.REPEAT
+        }
+    ];
+    var fbi = twgl.createFramebufferInfo(
+        this.gl,
+        attachments,
+        width,
+        height
+    )
+    fbi.width = width;
+    fbi.height = height;
+    return fbi;
+};
+
+Scene.prototype.createProgramInfo = function(vs, fs) {
+    return twgl.createProgramInfo(this.gl, [vs, fs]);
+};
+
+Scene.prototype.drawLastBuffer = function() {
+    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+    twgl.drawBufferInfo(this.gl, this.gl.TRIANGLES, this.bufferInfo);
+}
+
+Scene.prototype.draw = function(spec) {
+
+    this.gl.useProgram(spec.program.program);
+    
+    var uniforms = {};
+
+    if (spec.uniforms) {
+        Object.assign(uniforms, spec.uniforms);
+    }
+
+    if (spec.inputs) {
+        var inputs = {};
+        Object.keys(spec.inputs).map(function(key, index) {
+            inputs[key] = spec.inputs[key].attachments[0];
+        });
+        Object.assign(uniforms, inputs);
+    }
+
+    var resolution = [this.width, this.height];
+
+    if (spec.output) {
+        var resolution = [spec.output.width, spec.output.height];
+    }
+
+    Object.assign(uniforms, {
+        resolution: resolution,
+    });
+
+    twgl.setUniforms(spec.program, uniforms);
+
+    if (spec.output) {
+        this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, spec.output.framebuffer);
+    } else {
+        this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+    }
+
+    twgl.setBuffersAndAttributes(this.gl, spec.program, this.bufferInfo);
+    twgl.drawBufferInfo(this.gl, this.gl.TRIANGLES, this.bufferInfo);
+}
+
+module.exports = Scene;
+
+},{"twgl.js":5}]},{},[7]);

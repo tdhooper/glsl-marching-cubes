@@ -1,9 +1,10 @@
 "use strict";
 
-var glslify = require("glslify");
 var twgl = require("twgl.js");
+var glslify = require("glslify");
+var Scene = require('./scene');
 var R = require('ramda');
-var unpackFloat = require("glsl-read-float")
+var unpackFloat = require("glsl-read-float");
 
 var edgeTable = [
     0x0  , 0x109, 0x203, 0x30a, 0x406, 0x50f, 0x605, 0x70c,
@@ -98,57 +99,61 @@ var addLookupTexture = function(name, gl, uniforms, table) {
 
 var CubeMarch = function() {
 
-    var canvas = document.createElement('canvas');
-    document.body.appendChild(canvas);
-    var gl = twgl.getWebGLContext(canvas);
-    var programInfo = twgl.createProgramInfo(gl, [
-        glslify('./shaders/shader.vert'),
-        glslify('./shaders/shader.frag')
-    ]);
+    var size = 256;
+    var scene = new Scene(size, size);
 
-    var arrays = {
-      position: [-1, -1, 0, 1, -1, 0, -1, 1, 0, -1, 1, 0, 1, -1, 0, 1, 1, 0],
-    };
-    var bufferInfo = twgl.createBufferInfoFromArrays(gl, arrays);
+    var uniforms = {};
+    addLookupTexture('edgeTable', scene.gl, uniforms, edgeTable);
+    addLookupTexture('edgeIndicesTable', scene.gl, uniforms, edgeIndices);
+    addLookupTexture('cubeVertsTable', scene.gl, uniforms, cubeVerts);
 
-    gl.canvas.width = gl.canvas.height = 256;
-    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+    this.buffer = scene.createBuffer();
 
-    var uniforms = {
-        resolution: [gl.canvas.width, gl.canvas.height],
-    };
-
-    addLookupTexture('edgeTable', gl, uniforms, edgeTable);
-    addLookupTexture('edgeIndicesTable', gl, uniforms, edgeIndices);
-    addLookupTexture('cubeVertsTable', gl, uniforms, cubeVerts);
-
-    gl.useProgram(programInfo.program);
-    twgl.setBuffersAndAttributes(gl, programInfo, bufferInfo);
-
-    this.gl = gl;
+    this.scene = scene;
+    this.gl = scene.gl;
     this.uniforms = uniforms;
-    this.programInfo = programInfo;
-    this.bufferInfo = bufferInfo;
 };
 
 CubeMarch.prototype.march = function(dims, bounds) {
 
+    var scene = this.scene;
     var gl = this.gl;
     var uniforms = this.uniforms;
+    var buffer = this.buffer;
 
-    this.uniforms.boundsA = bounds[0];
-    this.uniforms.boundsB = bounds[1];
-    this.uniforms.dims = dims;
+    uniforms.boundsA = bounds[0];
+    uniforms.boundsB = bounds[1];
+    uniforms.dims = dims;
 
-    twgl.setUniforms(this.programInfo, uniforms);
-    twgl.drawBufferInfo(this.gl, gl.TRIANGLES, this.bufferInfo);
+    var verticesProg = scene.createProgramInfo(
+        glslify('./shaders/shader.vert'),
+        glslify('./shaders/calc-vertices.frag')
+    );
+
+    var trianglesProg = scene.createProgramInfo(
+        glslify('./shaders/shader.vert'),
+        glslify('./shaders/calc-triangles.frag')
+    );
+
+    scene.draw({
+        program: verticesProg,
+        uniforms: uniforms,
+        output: buffer
+    });
+
+    scene.draw({
+        program: trianglesProg,
+        uniforms: uniforms,
+        inputs: {
+            vertices: buffer
+        }
+    });
 
     var pixels = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
     gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
     var pointCount = uniforms.dims[0] * uniforms.dims[1] * uniforms.dims[2] * 12 * 3;
     var r, g, b, a;
     var points = [];
-    // return points;
 
     var pointIndex = 0;
     for (var i = 0; i < pointCount; i++) {

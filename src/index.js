@@ -10,8 +10,10 @@ var bounds = [
     [-1, -1, -1],
     [1, 1, 1]
 ];
+console.time("march");
 var cubeMarch = new CubeMarch();
 var points = cubeMarch.march(dims, bounds);
+console.timeEnd("march");
 // console.log(points)
 // points.forEach(function(point) {
 //     console.log(point);
