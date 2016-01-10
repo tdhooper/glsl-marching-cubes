@@ -6,7 +6,7 @@
   "scripts": {
     "build": "browserify src/index.js -o build/index.js",
     "watch": "watchify src/index.js -o build/index.js",
-    "test": "PATH=$(npm bin):$PATH glslify src/shaders/test/tests.glsl | glsl-testify | tap-spec"
+    "test": "PATH=$(npm bin):$PATH glslify src/shaders/components/test/tests.glsl | glsl-testify | tap-spec"
   },
   "author": "",
   "license": "ISC",
