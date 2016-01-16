@@ -52170,6 +52170,265 @@ var edgeTable = [
     0x70c, 0x605, 0x50f, 0x406, 0x30a, 0x203, 0x109, 0x0
 ];
 
+var triTable = [
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    0, 8, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    0, 1, 9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    1, 8, 3, 9, 8, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    1, 2, 10, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    0, 8, 3, 1, 2, 10, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    9, 2, 10, 0, 2, 9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    2, 8, 3, 2, 10, 8, 10, 9, 8, -1, -1, -1, -1, -1, -1, -1,
+    3, 11, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    0, 11, 2, 8, 11, 0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    1, 9, 0, 2, 3, 11, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    1, 11, 2, 1, 9, 11, 9, 8, 11, -1, -1, -1, -1, -1, -1, -1,
+    3, 10, 1, 11, 10, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    0, 10, 1, 0, 8, 10, 8, 11, 10, -1, -1, -1, -1, -1, -1, -1,
+    3, 9, 0, 3, 11, 9, 11, 10, 9, -1, -1, -1, -1, -1, -1, -1,
+    9, 8, 10, 10, 8, 11, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    4, 7, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    4, 3, 0, 7, 3, 4, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    0, 1, 9, 8, 4, 7, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    4, 1, 9, 4, 7, 1, 7, 3, 1, -1, -1, -1, -1, -1, -1, -1,
+    1, 2, 10, 8, 4, 7, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    3, 4, 7, 3, 0, 4, 1, 2, 10, -1, -1, -1, -1, -1, -1, -1,
+    9, 2, 10, 9, 0, 2, 8, 4, 7, -1, -1, -1, -1, -1, -1, -1,
+    2, 10, 9, 2, 9, 7, 2, 7, 3, 7, 9, 4, -1, -1, -1, -1,
+    8, 4, 7, 3, 11, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    11, 4, 7, 11, 2, 4, 2, 0, 4, -1, -1, -1, -1, -1, -1, -1,
+    9, 0, 1, 8, 4, 7, 2, 3, 11, -1, -1, -1, -1, -1, -1, -1,
+    4, 7, 11, 9, 4, 11, 9, 11, 2, 9, 2, 1, -1, -1, -1, -1,
+    3, 10, 1, 3, 11, 10, 7, 8, 4, -1, -1, -1, -1, -1, -1, -1,
+    1, 11, 10, 1, 4, 11, 1, 0, 4, 7, 11, 4, -1, -1, -1, -1,
+    4, 7, 8, 9, 0, 11, 9, 11, 10, 11, 0, 3, -1, -1, -1, -1,
+    4, 7, 11, 4, 11, 9, 9, 11, 10, -1, -1, -1, -1, -1, -1, -1,
+    9, 5, 4, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    9, 5, 4, 0, 8, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    0, 5, 4, 1, 5, 0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    8, 5, 4, 8, 3, 5, 3, 1, 5, -1, -1, -1, -1, -1, -1, -1,
+    1, 2, 10, 9, 5, 4, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    3, 0, 8, 1, 2, 10, 4, 9, 5, -1, -1, -1, -1, -1, -1, -1,
+    5, 2, 10, 5, 4, 2, 4, 0, 2, -1, -1, -1, -1, -1, -1, -1,
+    2, 10, 5, 3, 2, 5, 3, 5, 4, 3, 4, 8, -1, -1, -1, -1,
+    9, 5, 4, 2, 3, 11, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    0, 11, 2, 0, 8, 11, 4, 9, 5, -1, -1, -1, -1, -1, -1, -1,
+    0, 5, 4, 0, 1, 5, 2, 3, 11, -1, -1, -1, -1, -1, -1, -1,
+    2, 1, 5, 2, 5, 8, 2, 8, 11, 4, 8, 5, -1, -1, -1, -1,
+    10, 3, 11, 10, 1, 3, 9, 5, 4, -1, -1, -1, -1, -1, -1, -1,
+    4, 9, 5, 0, 8, 1, 8, 10, 1, 8, 11, 10, -1, -1, -1, -1,
+    5, 4, 0, 5, 0, 11, 5, 11, 10, 11, 0, 3, -1, -1, -1, -1,
+    5, 4, 8, 5, 8, 10, 10, 8, 11, -1, -1, -1, -1, -1, -1, -1,
+    9, 7, 8, 5, 7, 9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    9, 3, 0, 9, 5, 3, 5, 7, 3, -1, -1, -1, -1, -1, -1, -1,
+    0, 7, 8, 0, 1, 7, 1, 5, 7, -1, -1, -1, -1, -1, -1, -1,
+    1, 5, 3, 3, 5, 7, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    9, 7, 8, 9, 5, 7, 10, 1, 2, -1, -1, -1, -1, -1, -1, -1,
+    10, 1, 2, 9, 5, 0, 5, 3, 0, 5, 7, 3, -1, -1, -1, -1,
+    8, 0, 2, 8, 2, 5, 8, 5, 7, 10, 5, 2, -1, -1, -1, -1,
+    2, 10, 5, 2, 5, 3, 3, 5, 7, -1, -1, -1, -1, -1, -1, -1,
+    7, 9, 5, 7, 8, 9, 3, 11, 2, -1, -1, -1, -1, -1, -1, -1,
+    9, 5, 7, 9, 7, 2, 9, 2, 0, 2, 7, 11, -1, -1, -1, -1,
+    2, 3, 11, 0, 1, 8, 1, 7, 8, 1, 5, 7, -1, -1, -1, -1,
+    11, 2, 1, 11, 1, 7, 7, 1, 5, -1, -1, -1, -1, -1, -1, -1,
+    9, 5, 8, 8, 5, 7, 10, 1, 3, 10, 3, 11, -1, -1, -1, -1,
+    5, 7, 0, 5, 0, 9, 7, 11, 0, 1, 0, 10, 11, 10, 0, -1,
+    11, 10, 0, 11, 0, 3, 10, 5, 0, 8, 0, 7, 5, 7, 0, -1,
+    11, 10, 5, 7, 11, 5, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    10, 6, 5, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    0, 8, 3, 5, 10, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    9, 0, 1, 5, 10, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    1, 8, 3, 1, 9, 8, 5, 10, 6, -1, -1, -1, -1, -1, -1, -1,
+    1, 6, 5, 2, 6, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    1, 6, 5, 1, 2, 6, 3, 0, 8, -1, -1, -1, -1, -1, -1, -1,
+    9, 6, 5, 9, 0, 6, 0, 2, 6, -1, -1, -1, -1, -1, -1, -1,
+    5, 9, 8, 5, 8, 2, 5, 2, 6, 3, 2, 8, -1, -1, -1, -1,
+    2, 3, 11, 10, 6, 5, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    11, 0, 8, 11, 2, 0, 10, 6, 5, -1, -1, -1, -1, -1, -1, -1,
+    0, 1, 9, 2, 3, 11, 5, 10, 6, -1, -1, -1, -1, -1, -1, -1,
+    5, 10, 6, 1, 9, 2, 9, 11, 2, 9, 8, 11, -1, -1, -1, -1,
+    6, 3, 11, 6, 5, 3, 5, 1, 3, -1, -1, -1, -1, -1, -1, -1,
+    0, 8, 11, 0, 11, 5, 0, 5, 1, 5, 11, 6, -1, -1, -1, -1,
+    3, 11, 6, 0, 3, 6, 0, 6, 5, 0, 5, 9, -1, -1, -1, -1,
+    6, 5, 9, 6, 9, 11, 11, 9, 8, -1, -1, -1, -1, -1, -1, -1,
+    5, 10, 6, 4, 7, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    4, 3, 0, 4, 7, 3, 6, 5, 10, -1, -1, -1, -1, -1, -1, -1,
+    1, 9, 0, 5, 10, 6, 8, 4, 7, -1, -1, -1, -1, -1, -1, -1,
+    10, 6, 5, 1, 9, 7, 1, 7, 3, 7, 9, 4, -1, -1, -1, -1,
+    6, 1, 2, 6, 5, 1, 4, 7, 8, -1, -1, -1, -1, -1, -1, -1,
+    1, 2, 5, 5, 2, 6, 3, 0, 4, 3, 4, 7, -1, -1, -1, -1,
+    8, 4, 7, 9, 0, 5, 0, 6, 5, 0, 2, 6, -1, -1, -1, -1,
+    7, 3, 9, 7, 9, 4, 3, 2, 9, 5, 9, 6, 2, 6, 9, -1,
+    3, 11, 2, 7, 8, 4, 10, 6, 5, -1, -1, -1, -1, -1, -1, -1,
+    5, 10, 6, 4, 7, 2, 4, 2, 0, 2, 7, 11, -1, -1, -1, -1,
+    0, 1, 9, 4, 7, 8, 2, 3, 11, 5, 10, 6, -1, -1, -1, -1,
+    9, 2, 1, 9, 11, 2, 9, 4, 11, 7, 11, 4, 5, 10, 6, -1,
+    8, 4, 7, 3, 11, 5, 3, 5, 1, 5, 11, 6, -1, -1, -1, -1,
+    5, 1, 11, 5, 11, 6, 1, 0, 11, 7, 11, 4, 0, 4, 11, -1,
+    0, 5, 9, 0, 6, 5, 0, 3, 6, 11, 6, 3, 8, 4, 7, -1,
+    6, 5, 9, 6, 9, 11, 4, 7, 9, 7, 11, 9, -1, -1, -1, -1,
+    10, 4, 9, 6, 4, 10, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    4, 10, 6, 4, 9, 10, 0, 8, 3, -1, -1, -1, -1, -1, -1, -1,
+    10, 0, 1, 10, 6, 0, 6, 4, 0, -1, -1, -1, -1, -1, -1, -1,
+    8, 3, 1, 8, 1, 6, 8, 6, 4, 6, 1, 10, -1, -1, -1, -1,
+    1, 4, 9, 1, 2, 4, 2, 6, 4, -1, -1, -1, -1, -1, -1, -1,
+    3, 0, 8, 1, 2, 9, 2, 4, 9, 2, 6, 4, -1, -1, -1, -1,
+    0, 2, 4, 4, 2, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    8, 3, 2, 8, 2, 4, 4, 2, 6, -1, -1, -1, -1, -1, -1, -1,
+    10, 4, 9, 10, 6, 4, 11, 2, 3, -1, -1, -1, -1, -1, -1, -1,
+    0, 8, 2, 2, 8, 11, 4, 9, 10, 4, 10, 6, -1, -1, -1, -1,
+    3, 11, 2, 0, 1, 6, 0, 6, 4, 6, 1, 10, -1, -1, -1, -1,
+    6, 4, 1, 6, 1, 10, 4, 8, 1, 2, 1, 11, 8, 11, 1, -1,
+    9, 6, 4, 9, 3, 6, 9, 1, 3, 11, 6, 3, -1, -1, -1, -1,
+    8, 11, 1, 8, 1, 0, 11, 6, 1, 9, 1, 4, 6, 4, 1, -1,
+    3, 11, 6, 3, 6, 0, 0, 6, 4, -1, -1, -1, -1, -1, -1, -1,
+    6, 4, 8, 11, 6, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    7, 10, 6, 7, 8, 10, 8, 9, 10, -1, -1, -1, -1, -1, -1, -1,
+    0, 7, 3, 0, 10, 7, 0, 9, 10, 6, 7, 10, -1, -1, -1, -1,
+    10, 6, 7, 1, 10, 7, 1, 7, 8, 1, 8, 0, -1, -1, -1, -1,
+    10, 6, 7, 10, 7, 1, 1, 7, 3, -1, -1, -1, -1, -1, -1, -1,
+    1, 2, 6, 1, 6, 8, 1, 8, 9, 8, 6, 7, -1, -1, -1, -1,
+    2, 6, 9, 2, 9, 1, 6, 7, 9, 0, 9, 3, 7, 3, 9, -1,
+    7, 8, 0, 7, 0, 6, 6, 0, 2, -1, -1, -1, -1, -1, -1, -1,
+    7, 3, 2, 6, 7, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    2, 3, 11, 10, 6, 8, 10, 8, 9, 8, 6, 7, -1, -1, -1, -1,
+    2, 0, 7, 2, 7, 11, 0, 9, 7, 6, 7, 10, 9, 10, 7, -1,
+    1, 8, 0, 1, 7, 8, 1, 10, 7, 6, 7, 10, 2, 3, 11, -1,
+    11, 2, 1, 11, 1, 7, 10, 6, 1, 6, 7, 1, -1, -1, -1, -1,
+    8, 9, 6, 8, 6, 7, 9, 1, 6, 11, 6, 3, 1, 3, 6, -1,
+    0, 9, 1, 11, 6, 7, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    7, 8, 0, 7, 0, 6, 3, 11, 0, 11, 6, 0, -1, -1, -1, -1,
+    7, 11, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    7, 6, 11, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    3, 0, 8, 11, 7, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    0, 1, 9, 11, 7, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    8, 1, 9, 8, 3, 1, 11, 7, 6, -1, -1, -1, -1, -1, -1, -1,
+    10, 1, 2, 6, 11, 7, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    1, 2, 10, 3, 0, 8, 6, 11, 7, -1, -1, -1, -1, -1, -1, -1,
+    2, 9, 0, 2, 10, 9, 6, 11, 7, -1, -1, -1, -1, -1, -1, -1,
+    6, 11, 7, 2, 10, 3, 10, 8, 3, 10, 9, 8, -1, -1, -1, -1,
+    7, 2, 3, 6, 2, 7, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    7, 0, 8, 7, 6, 0, 6, 2, 0, -1, -1, -1, -1, -1, -1, -1,
+    2, 7, 6, 2, 3, 7, 0, 1, 9, -1, -1, -1, -1, -1, -1, -1,
+    1, 6, 2, 1, 8, 6, 1, 9, 8, 8, 7, 6, -1, -1, -1, -1,
+    10, 7, 6, 10, 1, 7, 1, 3, 7, -1, -1, -1, -1, -1, -1, -1,
+    10, 7, 6, 1, 7, 10, 1, 8, 7, 1, 0, 8, -1, -1, -1, -1,
+    0, 3, 7, 0, 7, 10, 0, 10, 9, 6, 10, 7, -1, -1, -1, -1,
+    7, 6, 10, 7, 10, 8, 8, 10, 9, -1, -1, -1, -1, -1, -1, -1,
+    6, 8, 4, 11, 8, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    3, 6, 11, 3, 0, 6, 0, 4, 6, -1, -1, -1, -1, -1, -1, -1,
+    8, 6, 11, 8, 4, 6, 9, 0, 1, -1, -1, -1, -1, -1, -1, -1,
+    9, 4, 6, 9, 6, 3, 9, 3, 1, 11, 3, 6, -1, -1, -1, -1,
+    6, 8, 4, 6, 11, 8, 2, 10, 1, -1, -1, -1, -1, -1, -1, -1,
+    1, 2, 10, 3, 0, 11, 0, 6, 11, 0, 4, 6, -1, -1, -1, -1,
+    4, 11, 8, 4, 6, 11, 0, 2, 9, 2, 10, 9, -1, -1, -1, -1,
+    10, 9, 3, 10, 3, 2, 9, 4, 3, 11, 3, 6, 4, 6, 3, -1,
+    8, 2, 3, 8, 4, 2, 4, 6, 2, -1, -1, -1, -1, -1, -1, -1,
+    0, 4, 2, 4, 6, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    1, 9, 0, 2, 3, 4, 2, 4, 6, 4, 3, 8, -1, -1, -1, -1,
+    1, 9, 4, 1, 4, 2, 2, 4, 6, -1, -1, -1, -1, -1, -1, -1,
+    8, 1, 3, 8, 6, 1, 8, 4, 6, 6, 10, 1, -1, -1, -1, -1,
+    10, 1, 0, 10, 0, 6, 6, 0, 4, -1, -1, -1, -1, -1, -1, -1,
+    4, 6, 3, 4, 3, 8, 6, 10, 3, 0, 3, 9, 10, 9, 3, -1,
+    10, 9, 4, 6, 10, 4, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    4, 9, 5, 7, 6, 11, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    0, 8, 3, 4, 9, 5, 11, 7, 6, -1, -1, -1, -1, -1, -1, -1,
+    5, 0, 1, 5, 4, 0, 7, 6, 11, -1, -1, -1, -1, -1, -1, -1,
+    11, 7, 6, 8, 3, 4, 3, 5, 4, 3, 1, 5, -1, -1, -1, -1,
+    9, 5, 4, 10, 1, 2, 7, 6, 11, -1, -1, -1, -1, -1, -1, -1,
+    6, 11, 7, 1, 2, 10, 0, 8, 3, 4, 9, 5, -1, -1, -1, -1,
+    7, 6, 11, 5, 4, 10, 4, 2, 10, 4, 0, 2, -1, -1, -1, -1,
+    3, 4, 8, 3, 5, 4, 3, 2, 5, 10, 5, 2, 11, 7, 6, -1,
+    7, 2, 3, 7, 6, 2, 5, 4, 9, -1, -1, -1, -1, -1, -1, -1,
+    9, 5, 4, 0, 8, 6, 0, 6, 2, 6, 8, 7, -1, -1, -1, -1,
+    3, 6, 2, 3, 7, 6, 1, 5, 0, 5, 4, 0, -1, -1, -1, -1,
+    6, 2, 8, 6, 8, 7, 2, 1, 8, 4, 8, 5, 1, 5, 8, -1,
+    9, 5, 4, 10, 1, 6, 1, 7, 6, 1, 3, 7, -1, -1, -1, -1,
+    1, 6, 10, 1, 7, 6, 1, 0, 7, 8, 7, 0, 9, 5, 4, -1,
+    4, 0, 10, 4, 10, 5, 0, 3, 10, 6, 10, 7, 3, 7, 10, -1,
+    7, 6, 10, 7, 10, 8, 5, 4, 10, 4, 8, 10, -1, -1, -1, -1,
+    6, 9, 5, 6, 11, 9, 11, 8, 9, -1, -1, -1, -1, -1, -1, -1,
+    3, 6, 11, 0, 6, 3, 0, 5, 6, 0, 9, 5, -1, -1, -1, -1,
+    0, 11, 8, 0, 5, 11, 0, 1, 5, 5, 6, 11, -1, -1, -1, -1,
+    6, 11, 3, 6, 3, 5, 5, 3, 1, -1, -1, -1, -1, -1, -1, -1,
+    1, 2, 10, 9, 5, 11, 9, 11, 8, 11, 5, 6, -1, -1, -1, -1,
+    0, 11, 3, 0, 6, 11, 0, 9, 6, 5, 6, 9, 1, 2, 10, -1,
+    11, 8, 5, 11, 5, 6, 8, 0, 5, 10, 5, 2, 0, 2, 5, -1,
+    6, 11, 3, 6, 3, 5, 2, 10, 3, 10, 5, 3, -1, -1, -1, -1,
+    5, 8, 9, 5, 2, 8, 5, 6, 2, 3, 8, 2, -1, -1, -1, -1,
+    9, 5, 6, 9, 6, 0, 0, 6, 2, -1, -1, -1, -1, -1, -1, -1,
+    1, 5, 8, 1, 8, 0, 5, 6, 8, 3, 8, 2, 6, 2, 8, -1,
+    1, 5, 6, 2, 1, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    1, 3, 6, 1, 6, 10, 3, 8, 6, 5, 6, 9, 8, 9, 6, -1,
+    10, 1, 0, 10, 0, 6, 9, 5, 0, 5, 6, 0, -1, -1, -1, -1,
+    0, 3, 8, 5, 6, 10, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    10, 5, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    11, 5, 10, 7, 5, 11, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    11, 5, 10, 11, 7, 5, 8, 3, 0, -1, -1, -1, -1, -1, -1, -1,
+    5, 11, 7, 5, 10, 11, 1, 9, 0, -1, -1, -1, -1, -1, -1, -1,
+    10, 7, 5, 10, 11, 7, 9, 8, 1, 8, 3, 1, -1, -1, -1, -1,
+    11, 1, 2, 11, 7, 1, 7, 5, 1, -1, -1, -1, -1, -1, -1, -1,
+    0, 8, 3, 1, 2, 7, 1, 7, 5, 7, 2, 11, -1, -1, -1, -1,
+    9, 7, 5, 9, 2, 7, 9, 0, 2, 2, 11, 7, -1, -1, -1, -1,
+    7, 5, 2, 7, 2, 11, 5, 9, 2, 3, 2, 8, 9, 8, 2, -1,
+    2, 5, 10, 2, 3, 5, 3, 7, 5, -1, -1, -1, -1, -1, -1, -1,
+    8, 2, 0, 8, 5, 2, 8, 7, 5, 10, 2, 5, -1, -1, -1, -1,
+    9, 0, 1, 5, 10, 3, 5, 3, 7, 3, 10, 2, -1, -1, -1, -1,
+    9, 8, 2, 9, 2, 1, 8, 7, 2, 10, 2, 5, 7, 5, 2, -1,
+    1, 3, 5, 3, 7, 5, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    0, 8, 7, 0, 7, 1, 1, 7, 5, -1, -1, -1, -1, -1, -1, -1,
+    9, 0, 3, 9, 3, 5, 5, 3, 7, -1, -1, -1, -1, -1, -1, -1,
+    9, 8, 7, 5, 9, 7, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    5, 8, 4, 5, 10, 8, 10, 11, 8, -1, -1, -1, -1, -1, -1, -1,
+    5, 0, 4, 5, 11, 0, 5, 10, 11, 11, 3, 0, -1, -1, -1, -1,
+    0, 1, 9, 8, 4, 10, 8, 10, 11, 10, 4, 5, -1, -1, -1, -1,
+    10, 11, 4, 10, 4, 5, 11, 3, 4, 9, 4, 1, 3, 1, 4, -1,
+    2, 5, 1, 2, 8, 5, 2, 11, 8, 4, 5, 8, -1, -1, -1, -1,
+    0, 4, 11, 0, 11, 3, 4, 5, 11, 2, 11, 1, 5, 1, 11, -1,
+    0, 2, 5, 0, 5, 9, 2, 11, 5, 4, 5, 8, 11, 8, 5, -1,
+    9, 4, 5, 2, 11, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    2, 5, 10, 3, 5, 2, 3, 4, 5, 3, 8, 4, -1, -1, -1, -1,
+    5, 10, 2, 5, 2, 4, 4, 2, 0, -1, -1, -1, -1, -1, -1, -1,
+    3, 10, 2, 3, 5, 10, 3, 8, 5, 4, 5, 8, 0, 1, 9, -1,
+    5, 10, 2, 5, 2, 4, 1, 9, 2, 9, 4, 2, -1, -1, -1, -1,
+    8, 4, 5, 8, 5, 3, 3, 5, 1, -1, -1, -1, -1, -1, -1, -1,
+    0, 4, 5, 1, 0, 5, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    8, 4, 5, 8, 5, 3, 9, 0, 5, 0, 3, 5, -1, -1, -1, -1,
+    9, 4, 5, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    4, 11, 7, 4, 9, 11, 9, 10, 11, -1, -1, -1, -1, -1, -1, -1,
+    0, 8, 3, 4, 9, 7, 9, 11, 7, 9, 10, 11, -1, -1, -1, -1,
+    1, 10, 11, 1, 11, 4, 1, 4, 0, 7, 4, 11, -1, -1, -1, -1,
+    3, 1, 4, 3, 4, 8, 1, 10, 4, 7, 4, 11, 10, 11, 4, -1,
+    4, 11, 7, 9, 11, 4, 9, 2, 11, 9, 1, 2, -1, -1, -1, -1,
+    9, 7, 4, 9, 11, 7, 9, 1, 11, 2, 11, 1, 0, 8, 3, -1,
+    11, 7, 4, 11, 4, 2, 2, 4, 0, -1, -1, -1, -1, -1, -1, -1,
+    11, 7, 4, 11, 4, 2, 8, 3, 4, 3, 2, 4, -1, -1, -1, -1,
+    2, 9, 10, 2, 7, 9, 2, 3, 7, 7, 4, 9, -1, -1, -1, -1,
+    9, 10, 7, 9, 7, 4, 10, 2, 7, 8, 7, 0, 2, 0, 7, -1,
+    3, 7, 10, 3, 10, 2, 7, 4, 10, 1, 10, 0, 4, 0, 10, -1,
+    1, 10, 2, 8, 7, 4, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    4, 9, 1, 4, 1, 7, 7, 1, 3, -1, -1, -1, -1, -1, -1, -1,
+    4, 9, 1, 4, 1, 7, 0, 8, 1, 8, 7, 1, -1, -1, -1, -1,
+    4, 0, 3, 7, 4, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    4, 8, 7, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    9, 10, 8, 10, 11, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    3, 0, 9, 3, 9, 11, 11, 9, 10, -1, -1, -1, -1, -1, -1, -1,
+    0, 1, 10, 0, 10, 8, 8, 10, 11, -1, -1, -1, -1, -1, -1, -1,
+    3, 1, 10, 11, 3, 10, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    1, 2, 11, 1, 11, 9, 9, 11, 8, -1, -1, -1, -1, -1, -1, -1,
+    3, 0, 9, 3, 9, 11, 1, 2, 9, 2, 11, 9, -1, -1, -1, -1,
+    0, 2, 11, 8, 0, 11, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    3, 2, 11, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    2, 3, 8, 2, 8, 10, 10, 8, 9, -1, -1, -1, -1, -1, -1, -1,
+    9, 10, 2, 0, 9, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    2, 3, 8, 2, 8, 10, 0, 1, 8, 1, 10, 8, -1, -1, -1, -1,
+    1, 10, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    1, 3, 8, 9, 1, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    0, 9, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    0, 3, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
+];
+
 var cubeVerts = [
     0, 0, 0,
     1, 0, 0,
@@ -52214,7 +52473,7 @@ var packUint = R.curry(toBaseArray)(256, 4);
 var addLookupTexture = function(name, gl, uniforms, table) {
     var packed = R.chain(packUint, table);
     var textures = twgl.createTextures(gl, {
-      table: {
+        table: {
             mag: gl.NEAREST,
             min: gl.NEAREST,
             wrap: gl.CLAMP_TO_EDGE,
@@ -52235,6 +52494,7 @@ var CubeMarch = function() {
     addLookupTexture('edgeTable', scene.gl, uniforms, edgeTable);
     addLookupTexture('edgeIndicesTable', scene.gl, uniforms, edgeIndices);
     addLookupTexture('cubeVertsTable', scene.gl, uniforms, cubeVerts);
+    addLookupTexture('triTable', scene.gl, uniforms, triTable);
 
     this.buffer = scene.createBuffer();
 
@@ -52256,12 +52516,12 @@ CubeMarch.prototype.march = function(dims, bounds) {
 
     var verticesProg = scene.createProgramInfo(
         "#define GLSLIFY 1\nattribute vec3 position;\n\nvoid main() {\n    gl_Position = vec4(position, 1.0);\n}\n",
-        "#define GLSLIFY 1\nprecision mediump float;\n\nfloat map(vec3 p) {\n    return length(p) - .5;\n}\n\nint unpackUint(vec4 values) {\n    float result = 0.;\n    result += values.x * pow(256., 0.);\n    result += values.y * pow(256., 1.);\n    result += values.z * pow(256., 2.);\n    result += values.w * pow(256., 3.);\n    return int(result);\n}\n\nint lookup(sampler2D table, int index, int size) {\n    vec2 uv = vec2(0, float(index) / float(size - 1));\n    vec4 tex = texture2D(table, uv) * 256.;\n    return unpackUint(tex);\n}\n\nvec3 lookupVertexCoord(int i, sampler2D cubeVertsTable, int cubeVertsTable_size) {\n    return vec3(\n        lookup(cubeVertsTable, i * 3, cubeVertsTable_size),\n        lookup(cubeVertsTable, i * 3 + 1, cubeVertsTable_size),\n        lookup(cubeVertsTable, i * 3 + 2, cubeVertsTable_size)\n    );\n}\n\nvec3 vertexPosition(\n    vec3 cube,\n    int vertex,\n    sampler2D cubeVertsTable,\n    int cubeVertsTable_size,\n    vec3 scale,\n    vec3 shift\n) {\n    vec3 v = lookupVertexCoord(vertex, cubeVertsTable, cubeVertsTable_size);\n    return scale * (cube + v) + shift; \n}\n\nfloat potentialAtVertex(\n    vec3 cube,\n    int vertex,\n    sampler2D cubeVertsTable,\n    int cubeVertsTable_size,\n    vec3 scale,\n    vec3 shift\n) {\n    vec3 pos = vertexPosition(cube, vertex, cubeVertsTable, cubeVertsTable_size, scale, shift);\n    return map(pos);\n}\n\nint coordToIndex(vec2 coord, vec2 size) {\n    return int(\n        floor(coord.x) + (floor(coord.y) * size.x)\n    );\n}\n\nconst int OR_LENGTH_529295689 = 15;\n\nint or(int a, int b) {\n    int result = 0;\n    float bitA;\n    float bitB;\n    int bit;\n    for (int i = 0; i < OR_LENGTH_529295689; i++) {\n        bitA = mod(float(a), 2.);\n        bitB = mod(float(b), 2.);\n        a = a / 2;\n        b = b / 2;\n        bit = int(ceil((bitA + bitB) / 2.));\n        result += bit * int(pow(2., float(i)));\n    }\n    return result;\n}\n\nint shiftLeft(int n, int shift) {\n    return n *= int(pow(float(2), float(shift)));\n}\n\nconst int VERTEX_COUNT_870892966 = 8;\n\nint getLookupTableIndex(\n    vec3 cube,\n    sampler2D cubeVertsTable,\n    int cubeVertsTable_size,\n    vec3 scale,\n    vec3 shift\n) {\n    int index = 0;\n    int newIndex;\n    float s;\n    for (int i = 0; i < VERTEX_COUNT_870892966; i++) {\n        s = potentialAtVertex(cube, i, cubeVertsTable, cubeVertsTable_size, scale, shift);\n        newIndex = 0;\n        if (s > 0.) {\n            newIndex = shiftLeft(1, i);\n        }\n        index = or(index, newIndex);\n    }\n    return index;\n}\n\nconst int AND_LENGTH_1604150559 = 15;\n\nint and(int a, int b) {\n    int result = 0;\n    float bitA;\n    float bitB;\n    int bit;\n    for (int i = 0; i < AND_LENGTH_1604150559; i++) {\n        bitA = mod(float(a), 2.);\n        bitB = mod(float(b), 2.);\n        a = a / 2;\n        b = b / 2;\n        bit = int(floor((bitA + bitB) / 2.));\n        result += bit * int(pow(2., float(i)));\n    }\n    return result;\n}\n\n#define FLOAT_MAX  1.70141184e38\n#define FLOAT_MIN  1.17549435e-38\n\nlowp vec4 encode_float_2315452051(highp float v) {\n  highp float av = abs(v);\n\n  //Handle special cases\n  if(av < FLOAT_MIN) {\n    return vec4(0.0, 0.0, 0.0, 0.0);\n  } else if(v > FLOAT_MAX) {\n    return vec4(127.0, 128.0, 0.0, 0.0) / 255.0;\n  } else if(v < -FLOAT_MAX) {\n    return vec4(255.0, 128.0, 0.0, 0.0) / 255.0;\n  }\n\n  highp vec4 c = vec4(0,0,0,0);\n\n  //Compute exponent and mantissa\n  highp float e = floor(log2(av));\n  highp float m = av * pow(2.0, -e) - 1.0;\n  \n  //Unpack mantissa\n  c[1] = floor(128.0 * m);\n  m -= c[1] / 128.0;\n  c[2] = floor(32768.0 * m);\n  m -= c[2] / 32768.0;\n  c[3] = floor(8388608.0 * m);\n  \n  //Unpack exponent\n  highp float ebias = e + 127.0;\n  c[0] = floor(ebias / 2.0);\n  ebias -= c[0] * 2.0;\n  c[1] += floor(ebias) * 128.0; \n\n  //Unpack sign bit\n  c[0] += 128.0 * step(0.0, -v);\n\n  //Scale back to range\n  return c / 255.0;\n}\n\nuniform vec2 resolution;\nuniform sampler2D edgeTable;\nuniform sampler2D edgeIndicesTable;\nuniform sampler2D cubeVertsTable;\nuniform int edgeTable_size;\nuniform int edgeIndicesTable_size;\nuniform int cubeVertsTable_size;\n\nuniform vec3 boundsA;\nuniform vec3 boundsB;\nuniform vec3 dims;\n\nconst int EDGE_COUNT = 12;\n\nvec3 scale = (boundsB - boundsA) / dims;\nvec3 shift = boundsA;\n\nfloat getComponent(vec3 value) {\n    int xyz = coordToIndex(gl_FragCoord.xy, resolution.xy);\n    xyz = int(mod(float(xyz), 3.));\n    if (xyz == 0) {\n        return value.x;\n    }\n    if (xyz == 1) {\n        return value.y;\n    }\n    if (xyz == 2) {\n        return value.z;\n    }\n}\n\nfloat getCubeIndex() {\n    float index = float(coordToIndex(gl_FragCoord.xy, resolution.xy));\n    index = floor(index / float(EDGE_COUNT) / 3.); // do for each edge, for x, y, and z\n    vec3 dims2 = dims - vec3(1);\n    if (index >= dims2.x * dims2.y * dims2.z) {\n        return -1.;\n    }\n    return index;\n}\n\nvec3 getCube(float index) {\n    vec3 dims2 = dims - vec3(1);\n    vec3 cube = vec3(0);\n    cube.z = mod(index, dims2.z);\n    cube.y = mod(floor(index / dims2.z), dims2.y);\n    cube.x = mod(floor(index / (dims2.y * dims2.z)), dims2.x);\n    cube.xyz = cube.zxy;\n    return cube;\n}\n\nvoid main() {\n    float cubeIndex = getCubeIndex();\n\n    if (cubeIndex < 0.) {\n        gl_FragColor = vec4(1);\n        return;\n    }\n\n    vec3 cube = getCube(cubeIndex);\n    int lookupIndex = getLookupTableIndex(cube, cubeVertsTable, cubeVertsTable_size, scale, shift);\n    int edge_mask = lookup(edgeTable, lookupIndex, edgeTable_size);\n\n    if (edge_mask == 0) {\n        // split here to reduce num pixels read\n        // gl_FragColor = vec4(1,0,0,1);\n        gl_FragColor = vec4(1);\n        return;\n    }\n\n    float ei = float(coordToIndex(gl_FragCoord.xy, resolution.xy));\n    ei = floor(ei / 3.); // do for x, y, and z\n    int edgeIndex = int(mod(ei, float(EDGE_COUNT)));\n\n    if (( and(edge_mask, shiftLeft(1, edgeIndex)) ) == 0) {\n        gl_FragColor = vec4(1);\n        return;\n    }\n\n    int vertIndexA = lookup(edgeIndicesTable, edgeIndex * 2, edgeIndicesTable_size);\n    int vertIndexB = lookup(edgeIndicesTable, edgeIndex * 2 + 1, edgeIndicesTable_size);\n    vec3 p0 = vec3(\n        lookup(cubeVertsTable, vertIndexA * 3, cubeVertsTable_size),\n        lookup(cubeVertsTable, vertIndexA * 3 + 1, cubeVertsTable_size),\n        lookup(cubeVertsTable, vertIndexA * 3 + 2, cubeVertsTable_size)\n    );\n    vec3 p1 = vec3(\n        lookup(cubeVertsTable, vertIndexB * 3, cubeVertsTable_size),\n        lookup(cubeVertsTable, vertIndexB * 3 + 1, cubeVertsTable_size),\n        lookup(cubeVertsTable, vertIndexB * 3 + 2, cubeVertsTable_size)\n    );\n\n    float a = potentialAtVertex(cube, vertIndexA, cubeVertsTable, cubeVertsTable_size, scale, shift);\n    float b = potentialAtVertex(cube, vertIndexB, cubeVertsTable, cubeVertsTable_size, scale, shift);\n    float d = a - b;\n    float t = 0.;\n    if (abs(d) > 1e-6) {\n        t = a / d;\n    }\n\n    vec3 value = scale * ( (cube + p0) + t * (p1 - p0) ) + shift;\n\n    gl_FragColor = encode_float_2315452051(getComponent(value));\n}\n\n      //var f = triTable[lookupIndex];\n      // offset = cubeIndex * EDGE_COUNT * 3\n      // for(var i=0; i<f.length; i += 3) {\n      // faces.push([\n      //   offset + f[i],\n      //   offset + f[i+1],\n      //   offset + f[i+2]\n      // ]);\n      // }\n\n"
+        "#define GLSLIFY 1\nprecision mediump float;\n\nfloat map(vec3 p) {\n    return length(p) - .5;\n}\n\nint unpackUint(vec4 values) {\n    float result = 0.;\n    result += values.x * pow(256., 0.);\n    result += values.y * pow(256., 1.);\n    result += values.z * pow(256., 2.);\n    result += values.w * pow(256., 3.);\n    return int(result);\n}\n\nint lookup(sampler2D table, int index, int size) {\n    vec2 uv = vec2(0, float(index) / float(size - 1));\n    vec4 tex = texture2D(table, uv) * 255.;\n    return unpackUint(tex);\n}\n\nvec3 lookupVertexCoord(int i, sampler2D cubeVertsTable, int cubeVertsTable_size) {\n    return vec3(\n        lookup(cubeVertsTable, i * 3, cubeVertsTable_size),\n        lookup(cubeVertsTable, i * 3 + 1, cubeVertsTable_size),\n        lookup(cubeVertsTable, i * 3 + 2, cubeVertsTable_size)\n    );\n}\n\nvec3 vertexPosition(\n    vec3 cube,\n    int vertex,\n    sampler2D cubeVertsTable,\n    int cubeVertsTable_size,\n    vec3 scale,\n    vec3 shift\n) {\n    vec3 v = lookupVertexCoord(vertex, cubeVertsTable, cubeVertsTable_size);\n    return scale * (cube + v) + shift; \n}\n\nfloat potentialAtVertex(\n    vec3 cube,\n    int vertex,\n    sampler2D cubeVertsTable,\n    int cubeVertsTable_size,\n    vec3 scale,\n    vec3 shift\n) {\n    vec3 pos = vertexPosition(cube, vertex, cubeVertsTable, cubeVertsTable_size, scale, shift);\n    return map(pos);\n}\n\nint coordToIndex(vec2 coord, vec2 size) {\n    return int(\n        floor(coord.x) + (floor(coord.y) * size.x)\n    );\n}\n\nvec3 getCube(float index, vec3 dims) {\n    vec3 dims2 = dims - vec3(1);\n    vec3 cube = vec3(0);\n    cube.z = mod(index, dims2.z);\n    cube.y = mod(floor(index / dims2.z), dims2.y);\n    cube.x = mod(floor(index / (dims2.y * dims2.z)), dims2.x);\n    cube.xyz = cube.zyx;\n    return cube;\n}\n\nconst int OR_LENGTH_529295689 = 15;\n\nint or(int a, int b) {\n    int result = 0;\n    float bitA;\n    float bitB;\n    int bit;\n    for (int i = 0; i < OR_LENGTH_529295689; i++) {\n        bitA = mod(float(a), 2.);\n        bitB = mod(float(b), 2.);\n        a = a / 2;\n        b = b / 2;\n        bit = int(ceil((bitA + bitB) / 2.));\n        result += bit * int(pow(2., float(i)));\n    }\n    return result;\n}\n\nint shiftLeft(int n, int shift) {\n    return n *= int(pow(float(2), float(shift)));\n}\n\nconst int VERTEX_COUNT_421267681 = 8;\n\nint getLookupTableIndex(\n    vec3 cube,\n    sampler2D cubeVertsTable,\n    int cubeVertsTable_size,\n    vec3 scale,\n    vec3 shift\n) {\n    int index = 0;\n    int newIndex;\n    float s;\n    for (int i = 0; i < VERTEX_COUNT_421267681; i++) {\n        s = potentialAtVertex(cube, i, cubeVertsTable, cubeVertsTable_size, scale, shift);\n        newIndex = 0;\n        if (s > 0.) {\n            newIndex = shiftLeft(1, i);\n        }\n        index = or(index, newIndex);\n    }\n    return index;\n}\n\nconst int AND_LENGTH_1117569599 = 15;\n\nint and(int a, int b) {\n    int result = 0;\n    float bitA;\n    float bitB;\n    int bit;\n    for (int i = 0; i < AND_LENGTH_1117569599; i++) {\n        bitA = mod(float(a), 2.);\n        bitB = mod(float(b), 2.);\n        a = a / 2;\n        b = b / 2;\n        bit = int(floor((bitA + bitB) / 2.));\n        result += bit * int(pow(2., float(i)));\n    }\n    return result;\n}\n\n#define FLOAT_MAX  1.70141184e38\n#define FLOAT_MIN  1.17549435e-38\n\nlowp vec4 encode_float_1535977339(highp float v) {\n  highp float av = abs(v);\n\n  //Handle special cases\n  if(av < FLOAT_MIN) {\n    return vec4(0.0, 0.0, 0.0, 0.0);\n  } else if(v > FLOAT_MAX) {\n    return vec4(127.0, 128.0, 0.0, 0.0) / 255.0;\n  } else if(v < -FLOAT_MAX) {\n    return vec4(255.0, 128.0, 0.0, 0.0) / 255.0;\n  }\n\n  highp vec4 c = vec4(0,0,0,0);\n\n  //Compute exponent and mantissa\n  highp float e = floor(log2(av));\n  highp float m = av * pow(2.0, -e) - 1.0;\n  \n  //Unpack mantissa\n  c[1] = floor(128.0 * m);\n  m -= c[1] / 128.0;\n  c[2] = floor(32768.0 * m);\n  m -= c[2] / 32768.0;\n  c[3] = floor(8388608.0 * m);\n  \n  //Unpack exponent\n  highp float ebias = e + 127.0;\n  c[0] = floor(ebias / 2.0);\n  ebias -= c[0] * 2.0;\n  c[1] += floor(ebias) * 128.0; \n\n  //Unpack sign bit\n  c[0] += 128.0 * step(0.0, -v);\n\n  //Scale back to range\n  return c / 255.0;\n}\n\nuniform vec2 resolution;\nuniform sampler2D edgeTable;\nuniform sampler2D edgeIndicesTable;\nuniform sampler2D cubeVertsTable;\nuniform int edgeTable_size;\nuniform int edgeIndicesTable_size;\nuniform int cubeVertsTable_size;\n\nuniform vec3 boundsA;\nuniform vec3 boundsB;\nuniform vec3 dims;\n\nconst int EDGE_COUNT = 12;\n\nvec3 scale = (boundsB - boundsA) / dims;\nvec3 shift = boundsA;\n\nfloat getComponent(vec3 value) {\n    int xyz = coordToIndex(gl_FragCoord.xy, resolution.xy);\n    xyz = int(mod(float(xyz), 3.));\n    if (xyz == 0) {\n        return value.x;\n    }\n    if (xyz == 1) {\n        return value.y;\n    }\n    if (xyz == 2) {\n        return value.z;\n    }\n}\n\nfloat getCubeIndex() {\n    float index = float(coordToIndex(gl_FragCoord.xy, resolution.xy));\n    index = floor(index / float(EDGE_COUNT) / 3.); // do for each edge, for x, y, and z\n    vec3 dims2 = dims - vec3(1);\n    if (index >= dims2.x * dims2.y * dims2.z) {\n        return -1.;\n    }\n    return index;\n}\n\nvoid main() {\n    float cubeIndex = getCubeIndex();\n\n    if (cubeIndex < 0.) {\n        gl_FragColor = vec4(1);\n        return;\n    }\n\n    vec3 cube = getCube(cubeIndex, dims);\n    int lookupIndex = getLookupTableIndex(cube, cubeVertsTable, cubeVertsTable_size, scale, shift);\n    int edge_mask = lookup(edgeTable, lookupIndex, edgeTable_size);\n\n    if (edge_mask == 0) {\n        // split here to reduce num pixels read\n        // gl_FragColor = vec4(1,0,0,1);\n        gl_FragColor = vec4(1);\n        return;\n    }\n\n    float ei = float(coordToIndex(gl_FragCoord.xy, resolution.xy));\n    ei = floor(ei / 3.); // do for x, y, and z\n    int edgeIndex = int(mod(ei, float(EDGE_COUNT)));\n\n    if (( and(edge_mask, shiftLeft(1, edgeIndex)) ) == 0) {\n        gl_FragColor = vec4(1);\n        return;\n    }\n\n    int vertIndexA = lookup(edgeIndicesTable, edgeIndex * 2, edgeIndicesTable_size);\n    int vertIndexB = lookup(edgeIndicesTable, edgeIndex * 2 + 1, edgeIndicesTable_size);\n    vec3 p0 = vec3(\n        lookup(cubeVertsTable, vertIndexA * 3, cubeVertsTable_size),\n        lookup(cubeVertsTable, vertIndexA * 3 + 1, cubeVertsTable_size),\n        lookup(cubeVertsTable, vertIndexA * 3 + 2, cubeVertsTable_size)\n    );\n    vec3 p1 = vec3(\n        lookup(cubeVertsTable, vertIndexB * 3, cubeVertsTable_size),\n        lookup(cubeVertsTable, vertIndexB * 3 + 1, cubeVertsTable_size),\n        lookup(cubeVertsTable, vertIndexB * 3 + 2, cubeVertsTable_size)\n    );\n\n    float a = potentialAtVertex(cube, vertIndexA, cubeVertsTable, cubeVertsTable_size, scale, shift);\n    float b = potentialAtVertex(cube, vertIndexB, cubeVertsTable, cubeVertsTable_size, scale, shift);\n    float d = a - b;\n    float t = 0.;\n    if (abs(d) > 1e-6) {\n        t = a / d;\n    }\n\n    vec3 value = scale * ( (cube + p0) + t * (p1 - p0) ) + shift;\n\n    gl_FragColor = encode_float_1535977339(getComponent(value));\n}\n"
     );
 
     var trianglesProg = scene.createProgramInfo(
         "#define GLSLIFY 1\nattribute vec3 position;\n\nvoid main() {\n    gl_Position = vec4(position, 1.0);\n}\n",
-        "#define GLSLIFY 1\nprecision mediump float;\n\nuniform vec2 resolution;\nuniform sampler2D vertices;\n\nvoid main() {\n    vec2 uv = gl_FragCoord.xy / resolution;\n    vec4 origin = texture2D( vertices, uv );\n    gl_FragColor = origin;\n}\n"
+        "#define GLSLIFY 1\nprecision mediump float;\n\nfloat map(vec3 p) {\n    return length(p) - .5;\n}\n\nint unpackUint(vec4 values) {\n    float result = 0.;\n    result += values.x * pow(256., 0.);\n    result += values.y * pow(256., 1.);\n    result += values.z * pow(256., 2.);\n    result += values.w * pow(256., 3.);\n    return int(result);\n}\n\nint lookup(sampler2D table, int index, int size) {\n    vec2 uv = vec2(0, float(index) / float(size - 1));\n    vec4 tex = texture2D(table, uv) * 255.;\n    return unpackUint(tex);\n}\n\nvec3 lookupVertexCoord(int i, sampler2D cubeVertsTable, int cubeVertsTable_size) {\n    return vec3(\n        lookup(cubeVertsTable, i * 3, cubeVertsTable_size),\n        lookup(cubeVertsTable, i * 3 + 1, cubeVertsTable_size),\n        lookup(cubeVertsTable, i * 3 + 2, cubeVertsTable_size)\n    );\n}\n\nvec3 vertexPosition(\n    vec3 cube,\n    int vertex,\n    sampler2D cubeVertsTable,\n    int cubeVertsTable_size,\n    vec3 scale,\n    vec3 shift\n) {\n    vec3 v = lookupVertexCoord(vertex, cubeVertsTable, cubeVertsTable_size);\n    return scale * (cube + v) + shift; \n}\n\nfloat potentialAtVertex(\n    vec3 cube,\n    int vertex,\n    sampler2D cubeVertsTable,\n    int cubeVertsTable_size,\n    vec3 scale,\n    vec3 shift\n) {\n    vec3 pos = vertexPosition(cube, vertex, cubeVertsTable, cubeVertsTable_size, scale, shift);\n    return map(pos);\n}\n\nint coordToIndex(vec2 coord, vec2 size) {\n    return int(\n        floor(coord.x) + (floor(coord.y) * size.x)\n    );\n}\n\nvec3 getCube(float index, vec3 dims) {\n    vec3 dims2 = dims - vec3(1);\n    vec3 cube = vec3(0);\n    cube.z = mod(index, dims2.z);\n    cube.y = mod(floor(index / dims2.z), dims2.y);\n    cube.x = mod(floor(index / (dims2.y * dims2.z)), dims2.x);\n    cube.xyz = cube.zyx;\n    return cube;\n}\n\nconst int OR_LENGTH_2315452051 = 15;\n\nint or(int a, int b) {\n    int result = 0;\n    float bitA;\n    float bitB;\n    int bit;\n    for (int i = 0; i < OR_LENGTH_2315452051; i++) {\n        bitA = mod(float(a), 2.);\n        bitB = mod(float(b), 2.);\n        a = a / 2;\n        b = b / 2;\n        bit = int(ceil((bitA + bitB) / 2.));\n        result += bit * int(pow(2., float(i)));\n    }\n    return result;\n}\n\nint shiftLeft(int n, int shift) {\n    return n *= int(pow(float(2), float(shift)));\n}\n\nconst int VERTEX_COUNT_421267681 = 8;\n\nint getLookupTableIndex(\n    vec3 cube,\n    sampler2D cubeVertsTable,\n    int cubeVertsTable_size,\n    vec3 scale,\n    vec3 shift\n) {\n    int index = 0;\n    int newIndex;\n    float s;\n    for (int i = 0; i < VERTEX_COUNT_421267681; i++) {\n        s = potentialAtVertex(cube, i, cubeVertsTable, cubeVertsTable_size, scale, shift);\n        newIndex = 0;\n        if (s > 0.) {\n            newIndex = shiftLeft(1, i);\n        }\n        index = or(index, newIndex);\n    }\n    return index;\n}\n\nconst int AND_LENGTH_1117569599 = 15;\n\nint and(int a, int b) {\n    int result = 0;\n    float bitA;\n    float bitB;\n    int bit;\n    for (int i = 0; i < AND_LENGTH_1117569599; i++) {\n        bitA = mod(float(a), 2.);\n        bitB = mod(float(b), 2.);\n        a = a / 2;\n        b = b / 2;\n        bit = int(floor((bitA + bitB) / 2.));\n        result += bit * int(pow(2., float(i)));\n    }\n    return result;\n}\n\n#define FLOAT_MAX  1.70141184e38\n#define FLOAT_MIN  1.17549435e-38\n\nlowp vec4 encode_float_1535977339(highp float v) {\n  highp float av = abs(v);\n\n  //Handle special cases\n  if(av < FLOAT_MIN) {\n    return vec4(0.0, 0.0, 0.0, 0.0);\n  } else if(v > FLOAT_MAX) {\n    return vec4(127.0, 128.0, 0.0, 0.0) / 255.0;\n  } else if(v < -FLOAT_MAX) {\n    return vec4(255.0, 128.0, 0.0, 0.0) / 255.0;\n  }\n\n  highp vec4 c = vec4(0,0,0,0);\n\n  //Compute exponent and mantissa\n  highp float e = floor(log2(av));\n  highp float m = av * pow(2.0, -e) - 1.0;\n  \n  //Unpack mantissa\n  c[1] = floor(128.0 * m);\n  m -= c[1] / 128.0;\n  c[2] = floor(32768.0 * m);\n  m -= c[2] / 32768.0;\n  c[3] = floor(8388608.0 * m);\n  \n  //Unpack exponent\n  highp float ebias = e + 127.0;\n  c[0] = floor(ebias / 2.0);\n  ebias -= c[0] * 2.0;\n  c[1] += floor(ebias) * 128.0; \n\n  //Unpack sign bit\n  c[0] += 128.0 * step(0.0, -v);\n\n  //Scale back to range\n  return c / 255.0;\n}\n\nuniform vec2 resolution;\nuniform sampler2D vertices;\n\nuniform sampler2D edgeTable;\nuniform sampler2D cubeVertsTable;\nuniform sampler2D triTable;\nuniform int edgeTable_size;\nuniform int cubeVertsTable_size;\nuniform int triTable_size;\n\nuniform vec3 boundsA;\nuniform vec3 boundsB;\nuniform vec3 dims;\n\nconst int EDGE_COUNT = 12;\nconst int TRI_TABLE_ROW_SIZE = 16;\n\nvec3 scale = (boundsB - boundsA) / dims;\nvec3 shift = boundsA;\n\nfloat getCubeIndex() {\n    float index = float(coordToIndex(gl_FragCoord.xy, resolution.xy));\n    index = floor(index / float(TRI_TABLE_ROW_SIZE)); // repeat for each tritable column\n    vec3 dims2 = dims - vec3(1);\n    if (index >= dims2.x * dims2.y * dims2.z) {\n        return -1.;\n    }\n    return index;\n}\n\nvoid main() {\n    float cubeIndex = getCubeIndex();\n\n    if (cubeIndex < 0.) {\n        gl_FragColor = vec4(1);\n        return;\n    }\n\n    vec3 cube = getCube(cubeIndex, dims);\n    int lookupIndex = getLookupTableIndex(cube, cubeVertsTable, cubeVertsTable_size, scale, shift);\n    int edge_mask = lookup(edgeTable, lookupIndex, edgeTable_size);\n\n    if (edge_mask == 0) {\n        gl_FragColor = vec4(1);\n        return;\n    }\n\n    float iir = float(coordToIndex(gl_FragCoord.xy, resolution.xy));\n    float indexInRow = mod(iir, float(TRI_TABLE_ROW_SIZE));\n\n    float triTableLookup = float(lookupIndex) * float(TRI_TABLE_ROW_SIZE) + indexInRow;\n    int vertexIndex = lookup(\n        triTable,\n        int(triTableLookup),\n        triTable_size\n    );\n\n    float offset = cubeIndex * float(EDGE_COUNT);\n    gl_FragColor = encode_float_1535977339(offset + float(vertexIndex));\n}\n"
     );
 
     scene.draw({
@@ -52269,14 +52529,7 @@ CubeMarch.prototype.march = function(dims, bounds) {
         uniforms: uniforms,
         output: buffer
     });
-
-    scene.draw({
-        program: trianglesProg,
-        uniforms: uniforms,
-        inputs: {
-            vertices: buffer
-        }
-    });
+    scene.drawLastBuffer();
 
     var pixels = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
     gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
@@ -52290,18 +52543,54 @@ CubeMarch.prototype.march = function(dims, bounds) {
         g = pixels[i * 4 + 1];
         b = pixels[i * 4 + 2];
         a = pixels[i * 4 + 3];
-        if (r + a + b + g + a === 255 * 5) {
-            continue;
-        }
-        // console.log(r, g, b, a);
-        // continue;
         points[pointIndex] = points[pointIndex] || [];
-        points[pointIndex].push(unpackFloat(r, g, b, a));
+
+        if (r + a + b + g + a === 255 * 5) {
+            points[pointIndex].push(null);
+        } else {
+            points[pointIndex].push(unpackFloat(r, g, b, a));
+        }
+
         if ((i + 1) % 3 == 0) {
             pointIndex += 1;
         }
     }
-    return points;
+
+    scene.draw({
+        program: trianglesProg,
+        uniforms: uniforms,
+        inputs: {
+            vertices: buffer
+        }
+    });
+
+    gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    var indexCount = uniforms.dims[0] * uniforms.dims[1] * uniforms.dims[2] * 16;
+    var r, g, b, a;
+    var triangles = [[]];
+    var currentIndex;
+
+    for (var i = 0; i < indexCount; i++) {
+        r = pixels[i * 4 + 0];
+        g = pixels[i * 4 + 1];
+        b = pixels[i * 4 + 2];
+        a = pixels[i * 4 + 3];
+        if (r + a + b + g + a === 255 * 5) {
+            continue;
+        }
+        if (r >= 79) { // we need better encoding of -1 in triTable texture
+            continue;
+        }
+        currentIndex = triangles.length - 1;
+        if (triangles[currentIndex].length == 3) {
+            triangles.push([]);
+            currentIndex += 1;
+        }
+        var value = unpackFloat(r, g, b, a);
+        triangles[currentIndex].push(value);
+    }
+
+    return { positions: points, cells: triangles };
 };
 
 module.exports = CubeMarch;
@@ -52321,12 +52610,8 @@ var bounds = [
 ];
 console.time("march");
 var cubeMarch = new CubeMarch();
-var points = cubeMarch.march(dims, bounds);
+var result = cubeMarch.march(dims, bounds);
 console.timeEnd("march");
-// console.log(points)
-// points.forEach(function(point) {
-//     console.log(point);
-// });
 
 
 
@@ -52372,26 +52657,23 @@ var wireframeMaterial = new THREE.MeshBasicMaterial({
 var axisHelper = new THREE.AxisHelper( 1 );
 scene.add( axisHelper );
 
-var addHelper = function(v, c) {
-    // console.log(v);
-    var g = new THREE.SphereGeometry(.05);
-    var color = new THREE.Color().setHSL(c || 0, 1, 0.5);
-    var m = new THREE.MeshBasicMaterial({ color: color })
-    var o = new THREE.Mesh(g, m);
-    o.position.copy(v);
-    scene.add(o);
+var geometry = new THREE.Geometry();
+var v, f;
+
+for (var i = 0; i < result.positions.length; ++i) {
+    v = result.positions[i];
+    geometry.vertices.push(new THREE.Vector3().fromArray(v));
 }
 
-points.forEach(function(point) {
-    addHelper(new THREE.Vector3().fromArray(point));
-});
+for (var i = 0; i < result.cells.length; ++i) {
+    f = result.cells[i];
+    geometry.faces.push(new THREE.Face3(f[0], f[1], f[2]));
+}
 
-var geometry = new THREE.BoxGeometry(1, 1, 1);
 var obj = new THREE.Mesh(geometry, material);
-obj.position.copy(new THREE.Vector3(.5, .5, .5));
 var wireframe = new THREE.WireframeHelper( obj, '#fff' );
-// scene.add(obj);
-// scene.add(wireframe);
+scene.add(obj);
+scene.add(wireframe);
 
 
 function render() {

@@ -12,12 +12,8 @@ var bounds = [
 ];
 console.time("march");
 var cubeMarch = new CubeMarch();
-var points = cubeMarch.march(dims, bounds);
+var result = cubeMarch.march(dims, bounds);
 console.timeEnd("march");
-// console.log(points)
-// points.forEach(function(point) {
-//     console.log(point);
-// });
 
 
 
@@ -63,26 +59,23 @@ var wireframeMaterial = new THREE.MeshBasicMaterial({
 var axisHelper = new THREE.AxisHelper( 1 );
 scene.add( axisHelper );
 
-var addHelper = function(v, c) {
-    // console.log(v);
-    var g = new THREE.SphereGeometry(.05);
-    var color = new THREE.Color().setHSL(c || 0, 1, 0.5);
-    var m = new THREE.MeshBasicMaterial({ color: color })
-    var o = new THREE.Mesh(g, m);
-    o.position.copy(v);
-    scene.add(o);
+var geometry = new THREE.Geometry();
+var v, f;
+
+for (var i = 0; i < result.positions.length; ++i) {
+    v = result.positions[i];
+    geometry.vertices.push(new THREE.Vector3().fromArray(v));
 }
 
-points.forEach(function(point) {
-    addHelper(new THREE.Vector3().fromArray(point));
-});
+for (var i = 0; i < result.cells.length; ++i) {
+    f = result.cells[i];
+    geometry.faces.push(new THREE.Face3(f[0], f[1], f[2]));
+}
 
-var geometry = new THREE.BoxGeometry(1, 1, 1);
 var obj = new THREE.Mesh(geometry, material);
-obj.position.copy(new THREE.Vector3(.5, .5, .5));
 var wireframe = new THREE.WireframeHelper( obj, '#fff' );
-// scene.add(obj);
-// scene.add(wireframe);
+scene.add(obj);
+scene.add(wireframe);
 
 
 function render() {

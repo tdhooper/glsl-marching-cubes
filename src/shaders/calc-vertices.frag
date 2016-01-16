@@ -2,6 +2,7 @@ precision mediump float;
 
 #pragma glslify: potentialAtVertex = require(./components/potential-at-vertex)
 #pragma glslify: coordToIndex = require(./components/coord-to-index)
+#pragma glslify: getCube = require(./components/cube)
 #pragma glslify: getLookupTableIndex = require(./components/lookup-table-index)
 #pragma glslify: lookup = require(./components/lookup)
 #pragma glslify: and = require(./components/and)
@@ -50,16 +51,6 @@ float getCubeIndex() {
     return index;
 }
 
-vec3 getCube(float index) {
-    vec3 dims2 = dims - vec3(1);
-    vec3 cube = vec3(0);
-    cube.z = mod(index, dims2.z);
-    cube.y = mod(floor(index / dims2.z), dims2.y);
-    cube.x = mod(floor(index / (dims2.y * dims2.z)), dims2.x);
-    cube.xyz = cube.zxy;
-    return cube;
-}
-
 void main() {
     float cubeIndex = getCubeIndex();
 
@@ -68,7 +59,7 @@ void main() {
         return;
     }
 
-    vec3 cube = getCube(cubeIndex);
+    vec3 cube = getCube(cubeIndex, dims);
     int lookupIndex = getLookupTableIndex(cube, cubeVertsTable, cubeVertsTable_size, scale, shift);
     int edge_mask = lookup(edgeTable, lookupIndex, edgeTable_size);
 
@@ -113,14 +104,3 @@ void main() {
 
     gl_FragColor = packFloat(getComponent(value));
 }
-
-      //var f = triTable[lookupIndex];
-      // offset = cubeIndex * EDGE_COUNT * 3
-      // for(var i=0; i<f.length; i += 3) {
-      // faces.push([
-      //   offset + f[i],
-      //   offset + f[i+1],
-      //   offset + f[i+2]
-      // ]);
-      // }
-
