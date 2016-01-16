@@ -11,8 +11,8 @@ var bounds = [
     [1, 1, 1]
 ];
 console.time("march");
-var cubeMarch = new CubeMarch();
-var result = cubeMarch.march(dims, bounds);
+var cubeMarch = new CubeMarch(dims, bounds);
+var result = cubeMarch.march();
 console.timeEnd("march");
 
 
@@ -59,6 +59,7 @@ var wireframeMaterial = new THREE.MeshBasicMaterial({
 var axisHelper = new THREE.AxisHelper( 1 );
 scene.add( axisHelper );
 
+console.time("geometry");
 var geometry = new THREE.Geometry();
 var v, f;
 
@@ -71,6 +72,9 @@ for (var i = 0; i < result.cells.length; ++i) {
     f = result.cells[i];
     geometry.faces.push(new THREE.Face3(f[0], f[1], f[2]));
 }
+
+geometry.mergeVertices();
+console.timeEnd("geometry");
 
 var obj = new THREE.Mesh(geometry, material);
 var wireframe = new THREE.WireframeHelper( obj, '#fff' );

@@ -356,10 +356,16 @@ var addLookupTexture = function(name, gl, uniforms, table) {
     uniforms[name + '_size'] = table.length;
 }
 
-var CubeMarch = function() {
+var CubeMarch = function(dims, bounds) {
 
-    var size = 256;
+    var cubes = dims[0] * dims[1] * dims[2];
+    var pixels = cubes * 12 * 3
+    var size = Math.ceil(Math.sqrt(pixels));
     var scene = new Scene(size, size);
+
+    console.log(cubes);
+    console.log(pixels);
+    console.log(size);
 
     var uniforms = {};
     addLookupTexture('edgeTable', scene.gl, uniforms, edgeTable);
@@ -372,14 +378,18 @@ var CubeMarch = function() {
     this.scene = scene;
     this.gl = scene.gl;
     this.uniforms = uniforms;
+    this.dims = dims;
+    this.bounds = bounds;
 };
 
-CubeMarch.prototype.march = function(dims, bounds) {
+CubeMarch.prototype.march = function() {
 
     var scene = this.scene;
     var gl = this.gl;
     var uniforms = this.uniforms;
     var buffer = this.buffer;
+    var dims = this.dims;
+    var bounds = this.bounds;
 
     uniforms.boundsA = bounds[0];
     uniforms.boundsB = bounds[1];
@@ -395,13 +405,16 @@ CubeMarch.prototype.march = function(dims, bounds) {
         glslify('./shaders/calc-triangles.frag')
     );
 
+    console.time("verts_glsl");
     scene.draw({
         program: verticesProg,
         uniforms: uniforms,
         output: buffer
     });
     scene.drawLastBuffer();
+    console.timeEnd("verts_glsl");
 
+    console.time("read_verts");
     var pixels = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
     gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
     var pointCount = uniforms.dims[0] * uniforms.dims[1] * uniforms.dims[2] * 12 * 3;
@@ -426,7 +439,9 @@ CubeMarch.prototype.march = function(dims, bounds) {
             pointIndex += 1;
         }
     }
+    console.timeEnd("read_verts");
 
+    console.time("triangles_glsl");
     scene.draw({
         program: trianglesProg,
         uniforms: uniforms,
@@ -434,7 +449,9 @@ CubeMarch.prototype.march = function(dims, bounds) {
             vertices: buffer
         }
     });
+    console.timeEnd("triangles_glsl");
 
+    console.time("read_triangles");
     gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
     var indexCount = uniforms.dims[0] * uniforms.dims[1] * uniforms.dims[2] * 16;
     var r, g, b, a;
@@ -460,6 +477,7 @@ CubeMarch.prototype.march = function(dims, bounds) {
         var value = unpackFloat(r, g, b, a);
         triangles[currentIndex].push(value);
     }
+    console.timeEnd("read_triangles");
 
     return { positions: points, cells: triangles };
 };
