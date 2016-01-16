@@ -29,8 +29,8 @@ Scene.prototype.createBuffer = function(width, height) {
         {
             format: this.gl.RGBA,
             type: this.gl.UNSIGNED_BYTE,
-            min: this.gl.LINEAR,
-            mag: this.gl.LINEAR,
+            min: this.gl.NEAREST,
+            mag: this.gl.NEAREST,
             wrap: this.gl.REPEAT
         }
     ];

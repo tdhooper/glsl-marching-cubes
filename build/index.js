@@ -52485,16 +52485,24 @@ var addLookupTexture = function(name, gl, uniforms, table) {
     uniforms[name + '_size'] = table.length;
 }
 
+var nextPowerOfTwo = function(value) {
+    value --;
+    value |= value >> 1;
+    value |= value >> 2;
+    value |= value >> 4;
+    value |= value >> 8;
+    value |= value >> 16;
+    value ++;
+    return value;
+}
+
 var CubeMarch = function(dims, bounds) {
 
     var cubes = dims[0] * dims[1] * dims[2];
     var pixels = cubes * 12 * 3
     var size = Math.ceil(Math.sqrt(pixels));
+    size = nextPowerOfTwo(size);
     var scene = new Scene(size, size);
-
-    console.log(cubes);
-    console.log(pixels);
-    console.log(size);
 
     var uniforms = {};
     addLookupTexture('edgeTable', scene.gl, uniforms, edgeTable);
@@ -52531,7 +52539,7 @@ CubeMarch.prototype.march = function() {
 
     var trianglesProg = scene.createProgramInfo(
         "#define GLSLIFY 1\nattribute vec3 position;\n\nvoid main() {\n    gl_Position = vec4(position, 1.0);\n}\n",
-        "#define GLSLIFY 1\nprecision mediump float;\n\nfloat map(vec3 p) {\n    return length(p) - .5;\n}\n\nint unpackUint(vec4 values) {\n    float result = 0.;\n    result += values.x * pow(256., 0.);\n    result += values.y * pow(256., 1.);\n    result += values.z * pow(256., 2.);\n    result += values.w * pow(256., 3.);\n    return int(result);\n}\n\nint lookup(sampler2D table, int index, int size) {\n    vec2 uv = vec2(0, float(index) / float(size - 1));\n    vec4 tex = texture2D(table, uv) * 255.;\n    return unpackUint(tex);\n}\n\nvec3 lookupVertexCoord(int i, sampler2D cubeVertsTable, int cubeVertsTable_size) {\n    return vec3(\n        lookup(cubeVertsTable, i * 3, cubeVertsTable_size),\n        lookup(cubeVertsTable, i * 3 + 1, cubeVertsTable_size),\n        lookup(cubeVertsTable, i * 3 + 2, cubeVertsTable_size)\n    );\n}\n\nvec3 vertexPosition(\n    vec3 cube,\n    int vertex,\n    sampler2D cubeVertsTable,\n    int cubeVertsTable_size,\n    vec3 scale,\n    vec3 shift\n) {\n    vec3 v = lookupVertexCoord(vertex, cubeVertsTable, cubeVertsTable_size);\n    return scale * (cube + v) + shift; \n}\n\nfloat potentialAtVertex(\n    vec3 cube,\n    int vertex,\n    sampler2D cubeVertsTable,\n    int cubeVertsTable_size,\n    vec3 scale,\n    vec3 shift\n) {\n    vec3 pos = vertexPosition(cube, vertex, cubeVertsTable, cubeVertsTable_size, scale, shift);\n    return map(pos);\n}\n\nint coordToIndex(vec2 coord, vec2 size) {\n    return int(\n        floor(coord.x) + (floor(coord.y) * size.x)\n    );\n}\n\nvec3 getCube(float index, vec3 dims) {\n    vec3 dims2 = dims - vec3(1);\n    vec3 cube = vec3(0);\n    cube.z = mod(index, dims2.z);\n    cube.y = mod(floor(index / dims2.z), dims2.y);\n    cube.x = mod(floor(index / (dims2.y * dims2.z)), dims2.x);\n    cube.xyz = cube.zyx;\n    return cube;\n}\n\nconst int OR_LENGTH_1062606552 = 15;\n\nint or(int a, int b) {\n    int result = 0;\n    float bitA;\n    float bitB;\n    int bit;\n    for (int i = 0; i < OR_LENGTH_1062606552; i++) {\n        bitA = mod(float(a), 2.);\n        bitB = mod(float(b), 2.);\n        a = a / 2;\n        b = b / 2;\n        bit = int(ceil((bitA + bitB) / 2.));\n        result += bit * int(pow(2., float(i)));\n    }\n    return result;\n}\n\nint shiftLeft(int n, int shift) {\n    return n *= int(pow(float(2), float(shift)));\n}\n\nconst int VERTEX_COUNT_421267681 = 8;\n\nint getLookupTableIndex(\n    vec3 cube,\n    sampler2D cubeVertsTable,\n    int cubeVertsTable_size,\n    vec3 scale,\n    vec3 shift\n) {\n    int index = 0;\n    int newIndex;\n    float s;\n    for (int i = 0; i < VERTEX_COUNT_421267681; i++) {\n        s = potentialAtVertex(cube, i, cubeVertsTable, cubeVertsTable_size, scale, shift);\n        newIndex = 0;\n        if (s > 0.) {\n            newIndex = shiftLeft(1, i);\n        }\n        index = or(index, newIndex);\n    }\n    return index;\n}\n\nconst int AND_LENGTH_1117569599 = 15;\n\nint and(int a, int b) {\n    int result = 0;\n    float bitA;\n    float bitB;\n    int bit;\n    for (int i = 0; i < AND_LENGTH_1117569599; i++) {\n        bitA = mod(float(a), 2.);\n        bitB = mod(float(b), 2.);\n        a = a / 2;\n        b = b / 2;\n        bit = int(floor((bitA + bitB) / 2.));\n        result += bit * int(pow(2., float(i)));\n    }\n    return result;\n}\n\n#define FLOAT_MAX  1.70141184e38\n#define FLOAT_MIN  1.17549435e-38\n\nlowp vec4 encode_float_1535977339(highp float v) {\n  highp float av = abs(v);\n\n  //Handle special cases\n  if(av < FLOAT_MIN) {\n    return vec4(0.0, 0.0, 0.0, 0.0);\n  } else if(v > FLOAT_MAX) {\n    return vec4(127.0, 128.0, 0.0, 0.0) / 255.0;\n  } else if(v < -FLOAT_MAX) {\n    return vec4(255.0, 128.0, 0.0, 0.0) / 255.0;\n  }\n\n  highp vec4 c = vec4(0,0,0,0);\n\n  //Compute exponent and mantissa\n  highp float e = floor(log2(av));\n  highp float m = av * pow(2.0, -e) - 1.0;\n  \n  //Unpack mantissa\n  c[1] = floor(128.0 * m);\n  m -= c[1] / 128.0;\n  c[2] = floor(32768.0 * m);\n  m -= c[2] / 32768.0;\n  c[3] = floor(8388608.0 * m);\n  \n  //Unpack exponent\n  highp float ebias = e + 127.0;\n  c[0] = floor(ebias / 2.0);\n  ebias -= c[0] * 2.0;\n  c[1] += floor(ebias) * 128.0; \n\n  //Unpack sign bit\n  c[0] += 128.0 * step(0.0, -v);\n\n  //Scale back to range\n  return c / 255.0;\n}\n\nuniform vec2 resolution;\nuniform sampler2D vertices;\n\nuniform sampler2D edgeTable;\nuniform sampler2D cubeVertsTable;\nuniform sampler2D triTable;\nuniform int edgeTable_size;\nuniform int cubeVertsTable_size;\nuniform int triTable_size;\n\nuniform vec3 boundsA;\nuniform vec3 boundsB;\nuniform vec3 dims;\n\nconst int EDGE_COUNT = 12;\nconst int TRI_TABLE_ROW_SIZE = 16;\n\nvec3 scale = (boundsB - boundsA) / dims;\nvec3 shift = boundsA;\n\nfloat getCubeIndex() {\n    float index = float(coordToIndex(gl_FragCoord.xy, resolution.xy));\n    index = floor(index / float(TRI_TABLE_ROW_SIZE)); // repeat for each tritable column\n    vec3 dims2 = dims - vec3(1);\n    if (index >= dims2.x * dims2.y * dims2.z) {\n        return -1.;\n    }\n    return index;\n}\n\nvoid main() {\n    float cubeIndex = getCubeIndex();\n\n    if (cubeIndex < 0.) {\n        gl_FragColor = vec4(1);\n        return;\n    }\n\n    vec3 cube = getCube(cubeIndex, dims);\n    int lookupIndex = getLookupTableIndex(cube, cubeVertsTable, cubeVertsTable_size, scale, shift);\n    int edge_mask = lookup(edgeTable, lookupIndex, edgeTable_size);\n\n    if (edge_mask == 0) {\n        gl_FragColor = vec4(1);\n        return;\n    }\n\n    float iir = float(coordToIndex(gl_FragCoord.xy, resolution.xy));\n    float indexInRow = mod(iir, float(TRI_TABLE_ROW_SIZE));\n\n    float triTableLookup = float(lookupIndex) * float(TRI_TABLE_ROW_SIZE) + indexInRow;\n    int vertexIndex = lookup(\n        triTable,\n        int(triTableLookup),\n        triTable_size\n    );\n\n    float offset = cubeIndex * float(EDGE_COUNT);\n    gl_FragColor = encode_float_1535977339(offset + float(vertexIndex));\n}\n"
+        "#define GLSLIFY 1\nprecision mediump float;\n\nfloat map(vec3 p) {\n    return length(p) - .5;\n}\n\nint unpackUint(vec4 values) {\n    float result = 0.;\n    result += values.x * pow(256., 0.);\n    result += values.y * pow(256., 1.);\n    result += values.z * pow(256., 2.);\n    result += values.w * pow(256., 3.);\n    return int(result);\n}\n\nint lookup(sampler2D table, int index, int size) {\n    vec2 uv = vec2(0, float(index) / float(size - 1));\n    vec4 tex = texture2D(table, uv) * 255.;\n    return unpackUint(tex);\n}\n\nvec3 lookupVertexCoord(int i, sampler2D cubeVertsTable, int cubeVertsTable_size) {\n    return vec3(\n        lookup(cubeVertsTable, i * 3, cubeVertsTable_size),\n        lookup(cubeVertsTable, i * 3 + 1, cubeVertsTable_size),\n        lookup(cubeVertsTable, i * 3 + 2, cubeVertsTable_size)\n    );\n}\n\nvec3 vertexPosition(\n    vec3 cube,\n    int vertex,\n    sampler2D cubeVertsTable,\n    int cubeVertsTable_size,\n    vec3 scale,\n    vec3 shift\n) {\n    vec3 v = lookupVertexCoord(vertex, cubeVertsTable, cubeVertsTable_size);\n    return scale * (cube + v) + shift; \n}\n\nfloat potentialAtVertex(\n    vec3 cube,\n    int vertex,\n    sampler2D cubeVertsTable,\n    int cubeVertsTable_size,\n    vec3 scale,\n    vec3 shift\n) {\n    vec3 pos = vertexPosition(cube, vertex, cubeVertsTable, cubeVertsTable_size, scale, shift);\n    return map(pos);\n}\n\nint coordToIndex(vec2 coord, vec2 size) {\n    return int(\n        floor(coord.x) + (floor(coord.y) * size.x)\n    );\n}\n\nvec2 indexToCoord(int index, vec2 size) {\n    float idx = float(index);\n    float x = mod(idx, size.x);\n    float y = (idx - x) / size.x;\n    return vec2(x, y);\n}\n\nvec3 getCube(float index, vec3 dims) {\n    vec3 dims2 = dims - vec3(1);\n    vec3 cube = vec3(0);\n    cube.z = mod(index, dims2.z);\n    cube.y = mod(floor(index / dims2.z), dims2.y);\n    cube.x = mod(floor(index / (dims2.y * dims2.z)), dims2.x);\n    cube.xyz = cube.zyx;\n    return cube;\n}\n\nconst int OR_LENGTH_2315452051 = 15;\n\nint or(int a, int b) {\n    int result = 0;\n    float bitA;\n    float bitB;\n    int bit;\n    for (int i = 0; i < OR_LENGTH_2315452051; i++) {\n        bitA = mod(float(a), 2.);\n        bitB = mod(float(b), 2.);\n        a = a / 2;\n        b = b / 2;\n        bit = int(ceil((bitA + bitB) / 2.));\n        result += bit * int(pow(2., float(i)));\n    }\n    return result;\n}\n\nint shiftLeft(int n, int shift) {\n    return n *= int(pow(float(2), float(shift)));\n}\n\nconst int VERTEX_COUNT_2976544439 = 8;\n\nint getLookupTableIndex(\n    vec3 cube,\n    sampler2D cubeVertsTable,\n    int cubeVertsTable_size,\n    vec3 scale,\n    vec3 shift\n) {\n    int index = 0;\n    int newIndex;\n    float s;\n    for (int i = 0; i < VERTEX_COUNT_2976544439; i++) {\n        s = potentialAtVertex(cube, i, cubeVertsTable, cubeVertsTable_size, scale, shift);\n        newIndex = 0;\n        if (s > 0.) {\n            newIndex = shiftLeft(1, i);\n        }\n        index = or(index, newIndex);\n    }\n    return index;\n}\n\nconst int AND_LENGTH_2281831123 = 15;\n\nint and(int a, int b) {\n    int result = 0;\n    float bitA;\n    float bitB;\n    int bit;\n    for (int i = 0; i < AND_LENGTH_2281831123; i++) {\n        bitA = mod(float(a), 2.);\n        bitB = mod(float(b), 2.);\n        a = a / 2;\n        b = b / 2;\n        bit = int(floor((bitA + bitB) / 2.));\n        result += bit * int(pow(2., float(i)));\n    }\n    return result;\n}\n\n#define FLOAT_MAX  1.70141184e38\n#define FLOAT_MIN  1.17549435e-38\n\nlowp vec4 encode_float_1460171947(highp float v) {\n  highp float av = abs(v);\n\n  //Handle special cases\n  if(av < FLOAT_MIN) {\n    return vec4(0.0, 0.0, 0.0, 0.0);\n  } else if(v > FLOAT_MAX) {\n    return vec4(127.0, 128.0, 0.0, 0.0) / 255.0;\n  } else if(v < -FLOAT_MAX) {\n    return vec4(255.0, 128.0, 0.0, 0.0) / 255.0;\n  }\n\n  highp vec4 c = vec4(0,0,0,0);\n\n  //Compute exponent and mantissa\n  highp float e = floor(log2(av));\n  highp float m = av * pow(2.0, -e) - 1.0;\n  \n  //Unpack mantissa\n  c[1] = floor(128.0 * m);\n  m -= c[1] / 128.0;\n  c[2] = floor(32768.0 * m);\n  m -= c[2] / 32768.0;\n  c[3] = floor(8388608.0 * m);\n  \n  //Unpack exponent\n  highp float ebias = e + 127.0;\n  c[0] = floor(ebias / 2.0);\n  ebias -= c[0] * 2.0;\n  c[1] += floor(ebias) * 128.0; \n\n  //Unpack sign bit\n  c[0] += 128.0 * step(0.0, -v);\n\n  //Scale back to range\n  return c / 255.0;\n}\n\nuniform vec2 resolution;\nuniform sampler2D vertices;\n\nuniform sampler2D edgeTable;\nuniform sampler2D cubeVertsTable;\nuniform sampler2D triTable;\nuniform int edgeTable_size;\nuniform int cubeVertsTable_size;\nuniform int triTable_size;\n\nuniform vec3 boundsA;\nuniform vec3 boundsB;\nuniform vec3 dims;\n\nconst int EDGE_COUNT = 12;\nconst int TRI_TABLE_ROW_SIZE = 16;\n\nvec3 scale = (boundsB - boundsA) / dims;\nvec3 shift = boundsA;\n\nfloat getCubeIndex() {\n    float index = float(coordToIndex(gl_FragCoord.xy, resolution.xy));\n    index = floor(index / float(TRI_TABLE_ROW_SIZE) / 3.); // repeat for each tritable column, for x, y, and z\n    vec3 dims2 = dims - vec3(1);\n    if (index >= dims2.x * dims2.y * dims2.z) {\n        return -1.;\n    }\n    return index;\n}\n\nvec4 getVertexComponentForCubeEdge(float cubeIndex, float edgeIndex, float component) {\n    float index = cubeIndex * float(EDGE_COUNT) * 3. + edgeIndex * 3. + component;\n    vec2 coord = indexToCoord(int(index), resolution.xy);\n    return texture2D(vertices, coord.xy / resolution);\n}\n\nvoid main() {\n\n    float cubeIndex = getCubeIndex();\n\n    if (cubeIndex < 0.) {\n        gl_FragColor = vec4(1);\n        return;\n    }\n\n    vec3 cube = getCube(cubeIndex, dims);\n    int lookupIndex = getLookupTableIndex(cube, cubeVertsTable, cubeVertsTable_size, scale, shift);\n    int edge_mask = lookup(edgeTable, lookupIndex, edgeTable_size);\n\n    if (edge_mask == 0) {\n        gl_FragColor = vec4(1);\n        return;\n    }\n\n    float iir = float(coordToIndex(gl_FragCoord.xy, resolution.xy));\n    iir = floor(iir / 3.); // do for x, y, and z\n    float indexInRow = mod(iir, float(TRI_TABLE_ROW_SIZE));\n\n    float triTableLookup = float(lookupIndex) * float(TRI_TABLE_ROW_SIZE) + indexInRow;\n    int vertexIndex = lookup(\n        triTable,\n        int(triTableLookup),\n        triTable_size\n    );\n\n    if (vertexIndex < 0) {\n        gl_FragColor = vec4(1);\n        return;\n    }\n\n    int xyz = coordToIndex(gl_FragCoord.xy, resolution.xy);\n    float component = mod(float(xyz), 3.);\n\n    gl_FragColor = getVertexComponentForCubeEdge(cubeIndex, float(vertexIndex), component);\n}\n"
     );
 
     console.time("verts_glsl");
@@ -52540,35 +52548,7 @@ CubeMarch.prototype.march = function() {
         uniforms: uniforms,
         output: buffer
     });
-    scene.drawLastBuffer();
     console.timeEnd("verts_glsl");
-
-    console.time("read_verts");
-    var pixels = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
-    gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-    var pointCount = uniforms.dims[0] * uniforms.dims[1] * uniforms.dims[2] * 12 * 3;
-    var r, g, b, a;
-    var points = [];
-
-    var pointIndex = 0;
-    for (var i = 0; i < pointCount; i++) {
-        r = pixels[i * 4 + 0];
-        g = pixels[i * 4 + 1];
-        b = pixels[i * 4 + 2];
-        a = pixels[i * 4 + 3];
-        points[pointIndex] = points[pointIndex] || [];
-
-        if (r + a + b + g + a === 255 * 5) {
-            points[pointIndex].push(null);
-        } else {
-            points[pointIndex].push(unpackFloat(r, g, b, a));
-        }
-
-        if ((i + 1) % 3 == 0) {
-            pointIndex += 1;
-        }
-    }
-    console.timeEnd("read_verts");
 
     console.time("triangles_glsl");
     scene.draw({
@@ -52581,11 +52561,14 @@ CubeMarch.prototype.march = function() {
     console.timeEnd("triangles_glsl");
 
     console.time("read_triangles");
+    var pixels = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
     gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-    var indexCount = uniforms.dims[0] * uniforms.dims[1] * uniforms.dims[2] * 16;
+    var indexCount = uniforms.dims[0] * uniforms.dims[1] * uniforms.dims[2] * 16 * 3;
     var r, g, b, a;
+    var vertices = [[]];
     var triangles = [[]];
-    var currentIndex;
+    var vertexIndex;
+    var triangleIndex;
 
     for (var i = 0; i < indexCount; i++) {
         r = pixels[i * 4 + 0];
@@ -52595,20 +52578,26 @@ CubeMarch.prototype.march = function() {
         if (r + a + b + g + a === 255 * 5) {
             continue;
         }
-        if (r >= 79) { // we need better encoding of -1 in triTable texture
-            continue;
+
+        vertexIndex = vertices.length - 1;
+        vertices[vertexIndex].push(unpackFloat(r, g, b, a));
+
+        if (vertices[vertexIndex].length == 3) {
+            triangleIndex = triangles.length - 1;
+            triangles[triangleIndex].push(vertexIndex);
+
+            if (triangles[triangleIndex].length == 3) {
+                triangles.push([]);
+            }
+
+            vertices.push([]);
         }
-        currentIndex = triangles.length - 1;
-        if (triangles[currentIndex].length == 3) {
-            triangles.push([]);
-            currentIndex += 1;
-        }
-        var value = unpackFloat(r, g, b, a);
-        triangles[currentIndex].push(value);
     }
+    vertices = vertices.slice(0, -1);
+    triangles = triangles.slice(0, -1);
     console.timeEnd("read_triangles");
 
-    return { positions: points, cells: triangles };
+    return { positions: vertices, cells: triangles };
 };
 
 module.exports = CubeMarch;
@@ -52620,14 +52609,16 @@ var CubeMarch = require("./cubemarch");
 var THREE = require('three');
 THREE.TrackballControls = require('three.trackball');
 
-var dd = 4;
+var dd = 20;
 var dims = [dd, dd, dd];
 var bounds = [
     [-1, -1, -1],
     [1, 1, 1]
 ];
-console.time("march");
+console.time("init");
 var cubeMarch = new CubeMarch(dims, bounds);
+console.timeEnd("init");
+console.time("march");
 var result = cubeMarch.march();
 console.timeEnd("march");
 
@@ -52689,7 +52680,7 @@ for (var i = 0; i < result.cells.length; ++i) {
     geometry.faces.push(new THREE.Face3(f[0], f[1], f[2]));
 }
 
-geometry.mergeVertices();
+// geometry.mergeVertices();
 console.timeEnd("geometry");
 
 var obj = new THREE.Mesh(geometry, material);
@@ -52782,8 +52773,8 @@ Scene.prototype.createBuffer = function(width, height) {
         {
             format: this.gl.RGBA,
             type: this.gl.UNSIGNED_BYTE,
-            min: this.gl.LINEAR,
-            mag: this.gl.LINEAR,
+            min: this.gl.NEAREST,
+            mag: this.gl.NEAREST,
             wrap: this.gl.REPEAT
         }
     ];

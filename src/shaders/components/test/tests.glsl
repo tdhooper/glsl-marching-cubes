@@ -29,6 +29,34 @@ bool test_coordtoindex_with_floats() {
     return (coordToIndex(vec2(1.9,2.9), vec2(3.,3.)) == 7);
 }
 
+// Index to coord
+
+#pragma glslify: indexToCoord = require(../index-to-coord)
+
+bool test_indextocoord_0_0() {
+    return (indexToCoord(0, vec2(2,2)) == vec2(0,0));
+}
+
+bool test_indextocoord_1_0() {
+    return (indexToCoord(1, vec2(2,2)) == vec2(1,0));
+}
+
+bool test_indextocoord_0_1() {
+    return (indexToCoord(2, vec2(2,2)) == vec2(0,1));
+}
+
+bool test_indextocoord_1_1() {
+    return (indexToCoord(3, vec2(2,2)) == vec2(1,1));
+}
+
+bool test_indextocoord_larger_size() {
+    return (indexToCoord(7, vec2(3,3)) == vec2(1,2));
+}
+
+bool test_indextocoord_with_floats() {
+    return (indexToCoord(7, vec2(3.,3.)) == vec2(1,2));
+}
+
 
 // Unpack UInt
 

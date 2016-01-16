@@ -2,6 +2,7 @@ precision mediump float;
 
 #pragma glslify: potentialAtVertex = require(./components/potential-at-vertex)
 #pragma glslify: coordToIndex = require(./components/coord-to-index)
+#pragma glslify: indexToCoord = require(./components/index-to-coord)
 #pragma glslify: getCube = require(./components/cube)
 #pragma glslify: getLookupTableIndex = require(./components/lookup-table-index)
 #pragma glslify: lookup = require(./components/lookup)
@@ -32,7 +33,7 @@ vec3 shift = boundsA;
 
 float getCubeIndex() {
     float index = float(coordToIndex(gl_FragCoord.xy, resolution.xy));
-    index = floor(index / float(TRI_TABLE_ROW_SIZE)); // repeat for each tritable column
+    index = floor(index / float(TRI_TABLE_ROW_SIZE) / 3.); // repeat for each tritable column, for x, y, and z
     vec3 dims2 = dims - vec3(1);
     if (index >= dims2.x * dims2.y * dims2.z) {
         return -1.;
@@ -40,7 +41,14 @@ float getCubeIndex() {
     return index;
 }
 
+vec4 getVertexComponentForCubeEdge(float cubeIndex, float edgeIndex, float component) {
+    float index = cubeIndex * float(EDGE_COUNT) * 3. + edgeIndex * 3. + component;
+    vec2 coord = indexToCoord(int(index), resolution.xy);
+    return texture2D(vertices, coord.xy / resolution);
+}
+
 void main() {
+
     float cubeIndex = getCubeIndex();
 
     if (cubeIndex < 0.) {
@@ -58,6 +66,7 @@ void main() {
     }
 
     float iir = float(coordToIndex(gl_FragCoord.xy, resolution.xy));
+    iir = floor(iir / 3.); // do for x, y, and z
     float indexInRow = mod(iir, float(TRI_TABLE_ROW_SIZE));
 
     float triTableLookup = float(lookupIndex) * float(TRI_TABLE_ROW_SIZE) + indexInRow;
@@ -67,6 +76,13 @@ void main() {
         triTable_size
     );
 
-    float offset = cubeIndex * float(EDGE_COUNT);
-    gl_FragColor = packFloat(offset + float(vertexIndex));
+    if (vertexIndex < 0) {
+        gl_FragColor = vec4(1);
+        return;
+    }
+
+    int xyz = coordToIndex(gl_FragCoord.xy, resolution.xy);
+    float component = mod(float(xyz), 3.);
+
+    gl_FragColor = getVertexComponentForCubeEdge(cubeIndex, float(vertexIndex), component);
 }

@@ -356,16 +356,24 @@ var addLookupTexture = function(name, gl, uniforms, table) {
     uniforms[name + '_size'] = table.length;
 }
 
+var nextPowerOfTwo = function(value) {
+    value --;
+    value |= value >> 1;
+    value |= value >> 2;
+    value |= value >> 4;
+    value |= value >> 8;
+    value |= value >> 16;
+    value ++;
+    return value;
+}
+
 var CubeMarch = function(dims, bounds) {
 
     var cubes = dims[0] * dims[1] * dims[2];
     var pixels = cubes * 12 * 3
     var size = Math.ceil(Math.sqrt(pixels));
+    size = nextPowerOfTwo(size);
     var scene = new Scene(size, size);
-
-    console.log(cubes);
-    console.log(pixels);
-    console.log(size);
 
     var uniforms = {};
     addLookupTexture('edgeTable', scene.gl, uniforms, edgeTable);
@@ -411,35 +419,7 @@ CubeMarch.prototype.march = function() {
         uniforms: uniforms,
         output: buffer
     });
-    scene.drawLastBuffer();
     console.timeEnd("verts_glsl");
-
-    console.time("read_verts");
-    var pixels = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
-    gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-    var pointCount = uniforms.dims[0] * uniforms.dims[1] * uniforms.dims[2] * 12 * 3;
-    var r, g, b, a;
-    var points = [];
-
-    var pointIndex = 0;
-    for (var i = 0; i < pointCount; i++) {
-        r = pixels[i * 4 + 0];
-        g = pixels[i * 4 + 1];
-        b = pixels[i * 4 + 2];
-        a = pixels[i * 4 + 3];
-        points[pointIndex] = points[pointIndex] || [];
-
-        if (r + a + b + g + a === 255 * 5) {
-            points[pointIndex].push(null);
-        } else {
-            points[pointIndex].push(unpackFloat(r, g, b, a));
-        }
-
-        if ((i + 1) % 3 == 0) {
-            pointIndex += 1;
-        }
-    }
-    console.timeEnd("read_verts");
 
     console.time("triangles_glsl");
     scene.draw({
@@ -452,11 +432,14 @@ CubeMarch.prototype.march = function() {
     console.timeEnd("triangles_glsl");
 
     console.time("read_triangles");
+    var pixels = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
     gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-    var indexCount = uniforms.dims[0] * uniforms.dims[1] * uniforms.dims[2] * 16;
+    var indexCount = uniforms.dims[0] * uniforms.dims[1] * uniforms.dims[2] * 16 * 3;
     var r, g, b, a;
+    var vertices = [[]];
     var triangles = [[]];
-    var currentIndex;
+    var vertexIndex;
+    var triangleIndex;
 
     for (var i = 0; i < indexCount; i++) {
         r = pixels[i * 4 + 0];
@@ -466,20 +449,26 @@ CubeMarch.prototype.march = function() {
         if (r + a + b + g + a === 255 * 5) {
             continue;
         }
-        if (r >= 79) { // we need better encoding of -1 in triTable texture
-            continue;
+
+        vertexIndex = vertices.length - 1;
+        vertices[vertexIndex].push(unpackFloat(r, g, b, a));
+
+        if (vertices[vertexIndex].length == 3) {
+            triangleIndex = triangles.length - 1;
+            triangles[triangleIndex].push(vertexIndex);
+
+            if (triangles[triangleIndex].length == 3) {
+                triangles.push([]);
+            }
+
+            vertices.push([]);
         }
-        currentIndex = triangles.length - 1;
-        if (triangles[currentIndex].length == 3) {
-            triangles.push([]);
-            currentIndex += 1;
-        }
-        var value = unpackFloat(r, g, b, a);
-        triangles[currentIndex].push(value);
     }
+    vertices = vertices.slice(0, -1);
+    triangles = triangles.slice(0, -1);
     console.timeEnd("read_triangles");
 
-    return { positions: points, cells: triangles };
+    return { positions: vertices, cells: triangles };
 };
 
 module.exports = CubeMarch;

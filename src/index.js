@@ -4,14 +4,16 @@ var CubeMarch = require("./cubemarch");
 var THREE = require('three');
 THREE.TrackballControls = require('three.trackball');
 
-var dd = 4;
+var dd = 20;
 var dims = [dd, dd, dd];
 var bounds = [
     [-1, -1, -1],
     [1, 1, 1]
 ];
-console.time("march");
+console.time("init");
 var cubeMarch = new CubeMarch(dims, bounds);
+console.timeEnd("init");
+console.time("march");
 var result = cubeMarch.march();
 console.timeEnd("march");
 
@@ -73,7 +75,7 @@ for (var i = 0; i < result.cells.length; ++i) {
     geometry.faces.push(new THREE.Face3(f[0], f[1], f[2]));
 }
 
-geometry.mergeVertices();
+// geometry.mergeVertices();
 console.timeEnd("geometry");
 
 var obj = new THREE.Mesh(geometry, material);
