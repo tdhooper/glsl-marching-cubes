@@ -383,6 +383,16 @@ var CubeMarch = function(dims, bounds) {
 
     this.buffer = scene.createBuffer();
 
+    this.verticesProg = scene.createProgramInfo(
+        glslify('./shaders/shader.vert'),
+        glslify('./shaders/calc-vertices.frag')
+    );
+
+    this.trianglesProg = scene.createProgramInfo(
+        glslify('./shaders/shader.vert'),
+        glslify('./shaders/calc-triangles.frag')
+    );
+
     this.scene = scene;
     this.gl = scene.gl;
     this.uniforms = uniforms;
@@ -403,33 +413,24 @@ CubeMarch.prototype.march = function() {
     uniforms.boundsB = bounds[1];
     uniforms.dims = dims;
 
-    var verticesProg = scene.createProgramInfo(
-        glslify('./shaders/shader.vert'),
-        glslify('./shaders/calc-vertices.frag')
-    );
-
-    var trianglesProg = scene.createProgramInfo(
-        glslify('./shaders/shader.vert'),
-        glslify('./shaders/calc-triangles.frag')
-    );
-
-    console.time("verts_glsl");
+    // console.time("verts_glsl");
     scene.draw({
-        program: verticesProg,
+        program: this.verticesProg,
         uniforms: uniforms,
         output: buffer
     });
-    console.timeEnd("verts_glsl");
+    // console.timeEnd("verts_glsl");
 
-    console.time("triangles_glsl");
+    // console.time("triangles_glsl");
     scene.draw({
-        program: trianglesProg,
+        program: this.trianglesProg,
         uniforms: uniforms,
         inputs: {
             vertices: buffer
         }
     });
-    console.timeEnd("triangles_glsl");
+    // console.timeEnd("triangles_glsl");
+return;
 
     console.time("read_triangles");
     var pixels = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
@@ -466,6 +467,7 @@ CubeMarch.prototype.march = function() {
     }
     vertices = vertices.slice(0, -1);
     triangles = triangles.slice(0, -1);
+    console.log(triangles.length)
     console.timeEnd("read_triangles");
 
     return { positions: vertices, cells: triangles };
