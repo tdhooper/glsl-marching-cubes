@@ -13,15 +13,18 @@ uniform vec2 resolution;
 uniform sampler2D edgeTable;
 uniform sampler2D edgeIndicesTable;
 uniform sampler2D cubeVertsTable;
+uniform sampler2D triTable;
 uniform int edgeTable_size;
 uniform int edgeIndicesTable_size;
 uniform int cubeVertsTable_size;
+uniform int triTable_size;
 
 uniform vec3 boundsA;
 uniform vec3 boundsB;
 uniform vec3 dims;
 
 const int EDGE_COUNT = 12;
+const int TRI_TABLE_ROW_SIZE = 16;
 
 vec3 scale = (boundsB - boundsA) / dims;
 vec3 shift = boundsA;
@@ -43,7 +46,7 @@ float getComponent(vec3 value) {
 
 float getCubeIndex() {
     float index = float(coordToIndex(gl_FragCoord.xy, resolution.xy));
-    index = floor(index / float(EDGE_COUNT) / 3.); // do for each edge, for x, y, and z
+    index = floor(index / float(TRI_TABLE_ROW_SIZE) / 3.); // repeat for each tritable column, for x, y, and z
     vec3 dims2 = dims - vec3(1);
     if (index >= dims2.x * dims2.y * dims2.z) {
         return -1.;
@@ -51,33 +54,7 @@ float getCubeIndex() {
     return index;
 }
 
-void main() {
-    float cubeIndex = getCubeIndex();
-
-    if (cubeIndex < 0.) {
-        gl_FragColor = vec4(1);
-        return;
-    }
-
-    vec3 cube = getCube(cubeIndex, dims);
-    int lookupIndex = getLookupTableIndex(cube, cubeVertsTable, cubeVertsTable_size, scale, shift);
-    int edge_mask = lookup(edgeTable, lookupIndex, edgeTable_size);
-
-    if (edge_mask == 0) {
-        // split here to reduce num pixels read
-        // gl_FragColor = vec4(1,0,0,1);
-        gl_FragColor = vec4(1);
-        return;
-    }
-
-    float ei = float(coordToIndex(gl_FragCoord.xy, resolution.xy));
-    ei = floor(ei / 3.); // do for x, y, and z
-    int edgeIndex = int(mod(ei, float(EDGE_COUNT)));
-
-    if (( and(edge_mask, shiftLeft(1, edgeIndex)) ) == 0) {
-        gl_FragColor = vec4(1);
-        return;
-    }
+vec3 calcVertex(vec3 cube, int edgeIndex) {
 
     int vertIndexA = lookup(edgeIndicesTable, edgeIndex * 2, edgeIndicesTable_size);
     int vertIndexB = lookup(edgeIndicesTable, edgeIndex * 2 + 1, edgeIndicesTable_size);
@@ -94,6 +71,7 @@ void main() {
 
     float a = potentialAtVertex(cube, vertIndexA, cubeVertsTable, cubeVertsTable_size, scale, shift);
     float b = potentialAtVertex(cube, vertIndexB, cubeVertsTable, cubeVertsTable_size, scale, shift);
+
     float d = a - b;
     float t = 0.;
     if (abs(d) > 1e-6) {
@@ -102,5 +80,49 @@ void main() {
 
     vec3 value = scale * ( (cube + p0) + t * (p1 - p0) ) + shift;
 
-    gl_FragColor = packFloat(getComponent(value));
+    return value;
+}
+
+int getTriEdgeIndex(int lookupIndex) {
+    float iir = float(coordToIndex(gl_FragCoord.xy, resolution.xy));
+    iir = floor(iir / 3.); // do for x, y, and z
+    float indexInRow = mod(iir, float(TRI_TABLE_ROW_SIZE));
+
+    float triTableLookup = float(lookupIndex) * float(TRI_TABLE_ROW_SIZE) + indexInRow;
+    int vertexIndex = lookup(
+        triTable,
+        int(triTableLookup),
+        triTable_size
+    );
+
+    return vertexIndex;
+}
+
+void main() {
+
+    float cubeIndex = getCubeIndex();
+
+    if (cubeIndex < 0.) {
+        gl_FragColor = vec4(1);
+        return;
+    }
+
+    vec3 cube = getCube(cubeIndex, dims);
+    int lookupIndex = getLookupTableIndex(cube, cubeVertsTable, cubeVertsTable_size, scale, shift);
+    int edge_mask = lookup(edgeTable, lookupIndex, edgeTable_size);
+
+    if (edge_mask == 0) {
+        gl_FragColor = vec4(1);
+        return;
+    }
+
+    int edgeIndex = getTriEdgeIndex(lookupIndex);
+
+    if (edgeIndex > EDGE_COUNT - 1) {
+        gl_FragColor = vec4(1);
+        return;
+    }
+
+    vec3 vert = calcVertex(cube, edgeIndex);
+    gl_FragColor = packFloat(getComponent(vert));
 }

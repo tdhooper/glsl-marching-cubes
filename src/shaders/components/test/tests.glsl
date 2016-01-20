@@ -99,6 +99,10 @@ bool test_or_8_3() {
     return (or(8,3) == 11);
 }
 
+bool test_or_127_128() {
+    return (or(127,128) == 255);
+}
+
 bool test_or_21345_28734() {
     return (or(21345,28734) == 29567);
 }

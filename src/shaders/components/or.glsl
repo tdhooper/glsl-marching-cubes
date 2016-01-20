@@ -1,4 +1,4 @@
-const int OR_LENGTH = 15;
+const int OR_LENGTH = 8;
 
 int or(int a, int b) {
     int result = 0;

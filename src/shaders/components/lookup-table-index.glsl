@@ -1,8 +1,6 @@
-#pragma glslify: potentialAtVertex = require(./potential-at-vertex)
 #pragma glslify: or = require(./or)
-#pragma glslify: shiftLeft = require(./shift-left)
+#pragma glslify: map = require(./map)
 
-const int VERTEX_COUNT = 8;
 
 int getLookupTableIndex(
     vec3 cube,
@@ -12,16 +10,32 @@ int getLookupTableIndex(
     vec3 shift
 ) {
     int index = 0;
-    int newIndex;
-    float s;
-    for (int i = 0; i < VERTEX_COUNT; i++) {
-        s = potentialAtVertex(cube, i, cubeVertsTable, cubeVertsTable_size, scale, shift);
-        newIndex = 0;
-        if (s > 0.) {
-            newIndex = shiftLeft(1, i);
-        }
-        index = or(index, newIndex);
+
+    if (map(scale * (cube + vec3(0, 0, 0)) + shift) > 0.) {
+        index = or(index, 1);
     }
+    if (map(scale * (cube + vec3(1, 0, 0)) + shift) > 0.) {
+        index = or(index, 2);
+    }
+    if (map(scale * (cube + vec3(1, 1, 0)) + shift) > 0.) {
+        index = or(index, 4);
+    }
+    if (map(scale * (cube + vec3(0, 1, 0)) + shift) > 0.) {
+        index = or(index, 8);
+    }
+    if (map(scale * (cube + vec3(0, 0, 1)) + shift) > 0.) {
+        index = or(index, 16);
+    }
+    if (map(scale * (cube + vec3(1, 0, 1)) + shift) > 0.) {
+        index = or(index, 32);
+    }
+    if (map(scale * (cube + vec3(1, 1, 1)) + shift) > 0.) {
+        index = or(index, 64);
+    }
+    if (map(scale * (cube + vec3(0, 1, 1)) + shift) > 0.) {
+        index = or(index, 128);
+    }
+
     return index;
 }
 

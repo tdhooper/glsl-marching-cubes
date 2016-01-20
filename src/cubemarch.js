@@ -311,6 +311,8 @@ var cubeVerts = [
     0, 1, 1
 ];
 
+// Roll cubeverts into this
+
 var edgeIndices = [
     0, 1,
     1, 2,
@@ -388,11 +390,6 @@ var CubeMarch = function(dims, bounds) {
         glslify('./shaders/calc-vertices.frag')
     );
 
-    this.trianglesProg = scene.createProgramInfo(
-        glslify('./shaders/shader.vert'),
-        glslify('./shaders/calc-triangles.frag')
-    );
-
     this.scene = scene;
     this.gl = scene.gl;
     this.uniforms = uniforms;
@@ -416,20 +413,10 @@ CubeMarch.prototype.march = function() {
     // console.time("verts_glsl");
     scene.draw({
         program: this.verticesProg,
-        uniforms: uniforms,
-        output: buffer
+        uniforms: uniforms
     });
     // console.timeEnd("verts_glsl");
 
-    // console.time("triangles_glsl");
-    scene.draw({
-        program: this.trianglesProg,
-        uniforms: uniforms,
-        inputs: {
-            vertices: buffer
-        }
-    });
-    // console.timeEnd("triangles_glsl");
 return;
 
     console.time("read_triangles");
