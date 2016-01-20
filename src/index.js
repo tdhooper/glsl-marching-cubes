@@ -1,20 +1,8 @@
 "use strict";
 
 var CubeMarch = require("./cubemarch");
-var loop = require('raf-loop');
-var Stats = require('stats.js');
 
-var stats = new Stats();
-stats.setMode(0); // 0: fps, 1: ms 
- 
-// align top-left 
-stats.domElement.style.position = 'fixed';
-stats.domElement.style.right = '0px';
-stats.domElement.style.top = '0px';
- 
-document.body.appendChild( stats.domElement );
-
-var dd = 15;
+var dd = 4;
 var dims = [dd, dd, dd];
 var s = 2;
 var bounds = [
@@ -25,15 +13,11 @@ console.time("init");
 var cubeMarch = new CubeMarch(dims, bounds);
 console.timeEnd("init");
 
-var engine = loop(function(dt) {
-    stats.begin();
-    var result = cubeMarch.march();
-    stats.end();
-}).start();
+console.time("march");
+var result = cubeMarch.march();
+console.timeEnd("march");
 
 
-
-/*
 var THREE = require('three');
 THREE.TrackballControls = require('three.trackball');
 
@@ -151,4 +135,4 @@ controls.addEventListener('change', function() {
 window.addEventListener('resize', onWindowResize, false);
 restoreControls()
 animate();
-*/
+

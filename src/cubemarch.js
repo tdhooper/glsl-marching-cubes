@@ -410,14 +410,12 @@ CubeMarch.prototype.march = function() {
     uniforms.boundsB = bounds[1];
     uniforms.dims = dims;
 
-    // console.time("verts_glsl");
+    console.time("verts_glsl");
     scene.draw({
         program: this.verticesProg,
         uniforms: uniforms
     });
-    // console.timeEnd("verts_glsl");
-
-return;
+    console.timeEnd("verts_glsl");
 
     console.time("read_triangles");
     var pixels = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
