@@ -372,9 +372,9 @@ var nextPowerOfTwo = function(value) {
 var CubeMarch = function(dims, bounds) {
 
     var cubes = dims[0] * dims[1] * dims[2];
-    var pixels = cubes * 12 * 3
+    var pixels = cubes * 16 * 3
     var size = Math.ceil(Math.sqrt(pixels));
-    size = nextPowerOfTwo(size);
+    // size = nextPowerOfTwo(size);
     var scene = new Scene(size, size);
 
     var uniforms = {};
@@ -419,9 +419,12 @@ CubeMarch.prototype.march = function(debug) {
         return;
     }
 
-    console.time("read_triangles");
     var pixels = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
+    console.time("readPixels");
     gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    console.timeEnd("readPixels");
+
+    console.time("read_triangles");
     var indexCount = uniforms.dims[0] * uniforms.dims[1] * uniforms.dims[2] * 16 * 3;
     var r, g, b, a;
     var vertices = [[]];
@@ -454,7 +457,6 @@ CubeMarch.prototype.march = function(debug) {
     }
     vertices = vertices.slice(0, -1);
     triangles = triangles.slice(0, -1);
-    console.log(triangles.length)
     console.timeEnd("read_triangles");
 
     return { positions: vertices, cells: triangles };
