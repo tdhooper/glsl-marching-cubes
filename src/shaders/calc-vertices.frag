@@ -108,7 +108,7 @@ void main() {
     }
 
     vec3 cube = getCube(cubeIndex, dims);
-    int lookupIndex = getLookupTableIndex(cube, cubeVertsTable, cubeVertsTable_size, scale, shift);
+    int lookupIndex = getLookupTableIndex(cube, scale, shift);
     int edge_mask = lookup(edgeTable, lookupIndex, edgeTable_size);
 
     if (edge_mask == 0) {
