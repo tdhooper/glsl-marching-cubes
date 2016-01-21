@@ -383,8 +383,6 @@ var CubeMarch = function(dims, bounds) {
     addLookupTexture('cubeVertsTable', scene.gl, uniforms, cubeVerts);
     addLookupTexture('triTable', scene.gl, uniforms, triTable);
 
-    this.buffer = scene.createBuffer();
-
     this.verticesProg = scene.createProgramInfo(
         glslify('./shaders/shader.vert'),
         glslify('./shaders/calc-vertices.frag')
@@ -402,7 +400,6 @@ CubeMarch.prototype.march = function(debug) {
     var scene = this.scene;
     var gl = this.gl;
     var uniforms = this.uniforms;
-    var buffer = this.buffer;
     var dims = this.dims;
     var bounds = this.bounds;
 
