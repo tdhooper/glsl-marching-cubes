@@ -397,7 +397,7 @@ var CubeMarch = function(dims, bounds) {
     this.bounds = bounds;
 };
 
-CubeMarch.prototype.march = function() {
+CubeMarch.prototype.march = function(debug) {
 
     var scene = this.scene;
     var gl = this.gl;
@@ -410,12 +410,14 @@ CubeMarch.prototype.march = function() {
     uniforms.boundsB = bounds[1];
     uniforms.dims = dims;
 
-    console.time("verts_glsl");
     scene.draw({
         program: this.verticesProg,
         uniforms: uniforms
     });
-    console.timeEnd("verts_glsl");
+
+    if (debug) {
+        return;
+    }
 
     console.time("read_triangles");
     var pixels = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
