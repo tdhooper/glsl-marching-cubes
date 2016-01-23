@@ -376,6 +376,9 @@ var CubeMarch = function(dims, bounds) {
     var size = Math.ceil(Math.sqrt(pixels));
     // size = nextPowerOfTwo(size);
     var scene = new Scene(size, size);
+    if (size > scene.gl.drawingBufferWidth) {
+        throw new Error('Context too big');
+    }
 
     var uniforms = {};
     addLookupTexture('edgeTable', scene.gl, uniforms, edgeTable);
