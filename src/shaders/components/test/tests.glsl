@@ -79,39 +79,6 @@ bool test_unpack_uint_123456() {
 }
 
 
-// or
-
-#pragma glslify: or = require(../or)
-
-bool test_or_0_1() {
-    return (or(0,1) == 1);
-}
-
-bool test_or_1_2() {
-    return (or(1,2) == 3);
-}
-
-bool test_or_3_8() {
-    return (or(3,8) == 11);
-}
-
-bool test_or_8_3() {
-    return (or(8,3) == 11);
-}
-
-bool test_or_127_128() {
-    return (or(127,128) == 255);
-}
-
-bool test_or_21345_28734() {
-    return (or(21345,28734) == 29567);
-}
-
-bool test_or_out_of_bounds() {
-    return (or(51345,38734) != 57311);
-}
-
-
 // and
 
 #pragma glslify: and = require(../and)
