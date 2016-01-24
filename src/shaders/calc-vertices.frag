@@ -10,11 +10,9 @@ precision mediump float;
 #pragma glslify: packFloat = require(glsl-read-float)
 
 uniform vec2 resolution;
-uniform sampler2D edgeTable;
 uniform sampler2D edgeIndicesTable;
 uniform sampler2D cubeVertsTable;
 uniform sampler2D triTable;
-uniform int edgeTable_size;
 uniform int edgeIndicesTable_size;
 uniform int cubeVertsTable_size;
 uniform int triTable_size;
@@ -109,12 +107,6 @@ void main() {
 
     vec3 cube = getCube(cubeIndex, dims);
     int lookupIndex = getLookupTableIndex(cube, scale, shift);
-    int edge_mask = lookup(edgeTable, lookupIndex, edgeTable_size);
-
-    if (edge_mask == 0) {
-        gl_FragColor = vec4(1);
-        return;
-    }
 
     int edgeIndex = getTriEdgeIndex(lookupIndex);
 
