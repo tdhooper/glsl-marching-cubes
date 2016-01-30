@@ -8,7 +8,7 @@ var debugMode = false;
 
 
 
-var dd = 4;
+var dd = 40;
 var dims = [dd, dd, dd];
 var s = 1;
 var bounds = [
