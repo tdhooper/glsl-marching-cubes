@@ -309,8 +309,8 @@ var edgeTable= new Uint32Array([
 
 var CubeMarch = function(dims, bounds) {
 
-    this.cubes = dims[0] * dims[1] * dims[2];
-    var pixels = this.cubes * 8;
+    this.verts = (dims[0] + 1) * (dims[1] + 1) * (dims[2] + 1);
+    var pixels = this.verts;
     var size = Math.ceil(Math.sqrt(pixels));
     // size = nextPowerOfTwo(size);
     var scene = new Scene(size, size);
@@ -350,11 +350,12 @@ CubeMarch.prototype.march = function(debug) {
 
     var pixelCount = gl.drawingBufferWidth * gl.drawingBufferHeight;
     var pixels = new Uint8Array(pixelCount * 4);
+    console.time("readPixels");
     gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-
-    var potentials = [[]];
-    var cubeIndex;
+    console.timeEnd("readPixels");
+    var potentials = [];
     var r, g, b, a;
+    console.time("parsePixels");
     for (var i = 0; i < pixelCount; i++) {
         r = pixels[i * 4 + 0];
         g = pixels[i * 4 + 1];
@@ -363,17 +364,20 @@ CubeMarch.prototype.march = function(debug) {
         if (r + a + b + g + a === 255 * 5) {
             continue;
         }
-
-        cubeIndex = potentials.length - 1;
-        if (potentials[cubeIndex].length == 8) {
-            cubeIndex += 1;
-            potentials.push([]);
-        }
-        potentials[cubeIndex].push(unpackFloat(r, g, b, a));
+        potentials.push(unpackFloat(r, g, b, a));
     }
+    console.timeEnd("parsePixels");
 
     if (debug) {
         return;
+    }
+
+    var cubeFromIndex = function(index, dims) {
+        var cube = [];
+        cube[0] = index % dims[0];
+        cube[1] = Math.floor(index / dims[0]) % dims[1];
+        cube[2] = Math.floor(index / (dims[1] * dims[0])) % dims[2];
+        return cube;
     }
 
     var indexFromCube = function(cube, dims) {
@@ -384,9 +388,27 @@ CubeMarch.prototype.march = function(debug) {
         return index;
     }
 
-    var potential = function(cube, vert) {
-        return potentials[indexFromCube(cube, dims)][vert];
+    var vertIndexFromCubeVert = function(cube, vert, dims) {
+        var vertCube = cubeVerts[vert];
+        var cubeVertCube = [
+            cube[0] + vertCube[0],
+            cube[1] + vertCube[1],
+            cube[2] + vertCube[2]
+        ];
+        var dims2 = [
+            dims[0] + 1,
+            dims[1] + 1,
+            dims[2] + 1,
+        ];
+        return indexFromCube(cubeVertCube, dims2);
     }
+
+    var potential = function(cube, vert) {
+        var index = vertIndexFromCubeVert(cube, vert, dims);
+        return potentials[index];
+    };
+
+    console.time("marchLoop");
 
     var bounds = this.bounds;
     var scale     = [0,0,0];
@@ -402,9 +424,9 @@ CubeMarch.prototype.march = function(debug) {
         , edges = new Array(12)
         , x = [0,0,0];
     //March over the volume
-    for(x[2]=0; x[2]<dims[2]-1; ++x[2])
-    for(x[1]=0; x[1]<dims[1]-1; ++x[1])
-    for(x[0]=0; x[0]<dims[0]-1; ++x[0]) {
+    for(x[2]=0; x[2]<dims[2]; ++x[2])
+    for(x[1]=0; x[1]<dims[1]; ++x[1])
+    for(x[0]=0; x[0]<dims[0]; ++x[0]) {
         //For each cell, compute cube mask
         var cube_index = 0;
         for(var i=0; i<8; ++i) {
@@ -444,6 +466,8 @@ CubeMarch.prototype.march = function(debug) {
             faces.push([edges[f[i]], edges[f[i+1]], edges[f[i+2]]]);
         }
     }
+
+    console.timeEnd("marchLoop");
     return { positions: vertices, cells: faces };
 };
 
