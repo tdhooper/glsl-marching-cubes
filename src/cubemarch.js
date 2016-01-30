@@ -334,14 +334,20 @@ var CubeMarch = function(dims, bounds) {
     this.uniforms = uniforms;
     this.dims = dims;
     this.bounds = bounds;
+    this.startTime = new Date().getTime();
 };
 
 CubeMarch.prototype.march = function(debug) {
+
+    var time = function(name) { ! debug && console.time(name); };
+    var timeEnd = function(name) { ! debug && console.timeEnd(name); };
 
     var scene = this.scene;
     var gl = this.gl;
     var dims = this.dims;
     var bounds = this.bounds;
+
+    this.uniforms.time = new Date().getTime() - this.startTime;
 
     this.scene.draw({
         program: this.potentialsProg,
@@ -350,12 +356,12 @@ CubeMarch.prototype.march = function(debug) {
 
     var pixelCount = gl.drawingBufferWidth * gl.drawingBufferHeight;
     var pixels = new Uint8Array(pixelCount * 4);
-    console.time("readPixels");
+    time("readPixels");
     gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-    console.timeEnd("readPixels");
+    timeEnd("readPixels");
     var potentials = [];
     var r, g, b, a;
-    console.time("parsePixels");
+    time("parsePixels");
     for (var i = 0; i < pixelCount; i++) {
         r = pixels[i * 4 + 0];
         g = pixels[i * 4 + 1];
@@ -366,7 +372,7 @@ CubeMarch.prototype.march = function(debug) {
         }
         potentials.push(unpackFloat(r, g, b, a));
     }
-    console.timeEnd("parsePixels");
+    timeEnd("parsePixels");
 
     if (debug) {
         return;

@@ -8,7 +8,7 @@ var debugMode = false;
 
 
 
-var dd = 40;
+var dd = 200;
 var dims = [dd, dd, dd];
 var s = 1;
 var bounds = [
@@ -103,7 +103,7 @@ if (debugMode) {
 
     var obj = new THREE.Mesh(geometry, material);
     var wireframe = new THREE.WireframeHelper( obj, '#fff' );
-    scene.add(obj);
+    // scene.add(obj);
     scene.add(wireframe);
 
 
