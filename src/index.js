@@ -7,8 +7,7 @@ var CubeMarch = require("./cubemarch");
 var debugMode = false;
 
 
-
-var dd = 200;
+var dd = 10;
 var dims = [dd, dd, dd];
 var s = 1;
 var bounds = [
@@ -35,10 +34,6 @@ if (debugMode) {
     }).start();
 
 } else {
-
-    console.time("march");
-    var result = cubeMarch.march();
-    console.timeEnd("march");
 
     var THREE = require('three');
     THREE.TrackballControls = require('three.trackball');
@@ -84,27 +79,48 @@ if (debugMode) {
     var axisHelper = new THREE.AxisHelper( 1 );
     scene.add( axisHelper );
 
-    console.time("geometry");
     var geometry = new THREE.Geometry();
-    var v, f;
-
-    for (var i = 0; i < result.positions.length; ++i) {
-        v = result.positions[i];
-        geometry.vertices.push(new THREE.Vector3().fromArray(v));
-    }
-
-    for (var i = 0; i < result.cells.length; ++i) {
-        f = result.cells[i];
-        geometry.faces.push(new THREE.Face3(f[0], f[1], f[2]));
-    }
-
-    // geometry.mergeVertices();
-    console.timeEnd("geometry");
-
     var obj = new THREE.Mesh(geometry, material);
     var wireframe = new THREE.WireframeHelper( obj, '#fff' );
     // scene.add(obj);
     scene.add(wireframe);
+
+
+    var updateGeometry = function(data) {
+        if ( ! data) {
+            return;
+        }
+
+        var v, f;
+        var len = geometry.vertices.length;
+
+        for (var i = 0; i < data.vertices.length; ++i) {
+            v = data.vertices[i];
+            geometry.vertices.push(new THREE.Vector3().fromArray(v));
+        }
+
+        for (var i = 0; i < data.faces.length; ++i) {
+            f = data.faces[i];
+            geometry.faces.push(
+                new THREE.Face3(
+                    f[0] + len,
+                    f[1] + len,
+                    f[2] + len
+                )
+            );
+        }
+
+        geometry.verticesNeedUpdate = true;
+        geometry.elementsNeedUpdate = true;
+
+        scene.remove(wireframe);
+        wireframe = new THREE.WireframeHelper( obj, '#fff' );
+        scene.add(wireframe);
+
+    };
+
+    cubeMarch.march(updateGeometry);
+
 
 
     function render() {

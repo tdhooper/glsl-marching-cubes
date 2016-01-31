@@ -1,4 +1,400 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+function EventEmitter() {
+  this._events = this._events || {};
+  this._maxListeners = this._maxListeners || undefined;
+}
+module.exports = EventEmitter;
+
+// Backwards-compat with node 0.10.x
+EventEmitter.EventEmitter = EventEmitter;
+
+EventEmitter.prototype._events = undefined;
+EventEmitter.prototype._maxListeners = undefined;
+
+// By default EventEmitters will print a warning if more than 10 listeners are
+// added to it. This is a useful default which helps finding memory leaks.
+EventEmitter.defaultMaxListeners = 10;
+
+// Obviously not all Emitters should be limited to 10. This function allows
+// that to be increased. Set to zero for unlimited.
+EventEmitter.prototype.setMaxListeners = function(n) {
+  if (!isNumber(n) || n < 0 || isNaN(n))
+    throw TypeError('n must be a positive number');
+  this._maxListeners = n;
+  return this;
+};
+
+EventEmitter.prototype.emit = function(type) {
+  var er, handler, len, args, i, listeners;
+
+  if (!this._events)
+    this._events = {};
+
+  // If there is no 'error' event listener then throw.
+  if (type === 'error') {
+    if (!this._events.error ||
+        (isObject(this._events.error) && !this._events.error.length)) {
+      er = arguments[1];
+      if (er instanceof Error) {
+        throw er; // Unhandled 'error' event
+      }
+      throw TypeError('Uncaught, unspecified "error" event.');
+    }
+  }
+
+  handler = this._events[type];
+
+  if (isUndefined(handler))
+    return false;
+
+  if (isFunction(handler)) {
+    switch (arguments.length) {
+      // fast cases
+      case 1:
+        handler.call(this);
+        break;
+      case 2:
+        handler.call(this, arguments[1]);
+        break;
+      case 3:
+        handler.call(this, arguments[1], arguments[2]);
+        break;
+      // slower
+      default:
+        len = arguments.length;
+        args = new Array(len - 1);
+        for (i = 1; i < len; i++)
+          args[i - 1] = arguments[i];
+        handler.apply(this, args);
+    }
+  } else if (isObject(handler)) {
+    len = arguments.length;
+    args = new Array(len - 1);
+    for (i = 1; i < len; i++)
+      args[i - 1] = arguments[i];
+
+    listeners = handler.slice();
+    len = listeners.length;
+    for (i = 0; i < len; i++)
+      listeners[i].apply(this, args);
+  }
+
+  return true;
+};
+
+EventEmitter.prototype.addListener = function(type, listener) {
+  var m;
+
+  if (!isFunction(listener))
+    throw TypeError('listener must be a function');
+
+  if (!this._events)
+    this._events = {};
+
+  // To avoid recursion in the case that type === "newListener"! Before
+  // adding it to the listeners, first emit "newListener".
+  if (this._events.newListener)
+    this.emit('newListener', type,
+              isFunction(listener.listener) ?
+              listener.listener : listener);
+
+  if (!this._events[type])
+    // Optimize the case of one listener. Don't need the extra array object.
+    this._events[type] = listener;
+  else if (isObject(this._events[type]))
+    // If we've already got an array, just append.
+    this._events[type].push(listener);
+  else
+    // Adding the second element, need to change to array.
+    this._events[type] = [this._events[type], listener];
+
+  // Check for listener leak
+  if (isObject(this._events[type]) && !this._events[type].warned) {
+    var m;
+    if (!isUndefined(this._maxListeners)) {
+      m = this._maxListeners;
+    } else {
+      m = EventEmitter.defaultMaxListeners;
+    }
+
+    if (m && m > 0 && this._events[type].length > m) {
+      this._events[type].warned = true;
+      console.error('(node) warning: possible EventEmitter memory ' +
+                    'leak detected. %d listeners added. ' +
+                    'Use emitter.setMaxListeners() to increase limit.',
+                    this._events[type].length);
+      if (typeof console.trace === 'function') {
+        // not supported in IE 10
+        console.trace();
+      }
+    }
+  }
+
+  return this;
+};
+
+EventEmitter.prototype.on = EventEmitter.prototype.addListener;
+
+EventEmitter.prototype.once = function(type, listener) {
+  if (!isFunction(listener))
+    throw TypeError('listener must be a function');
+
+  var fired = false;
+
+  function g() {
+    this.removeListener(type, g);
+
+    if (!fired) {
+      fired = true;
+      listener.apply(this, arguments);
+    }
+  }
+
+  g.listener = listener;
+  this.on(type, g);
+
+  return this;
+};
+
+// emits a 'removeListener' event iff the listener was removed
+EventEmitter.prototype.removeListener = function(type, listener) {
+  var list, position, length, i;
+
+  if (!isFunction(listener))
+    throw TypeError('listener must be a function');
+
+  if (!this._events || !this._events[type])
+    return this;
+
+  list = this._events[type];
+  length = list.length;
+  position = -1;
+
+  if (list === listener ||
+      (isFunction(list.listener) && list.listener === listener)) {
+    delete this._events[type];
+    if (this._events.removeListener)
+      this.emit('removeListener', type, listener);
+
+  } else if (isObject(list)) {
+    for (i = length; i-- > 0;) {
+      if (list[i] === listener ||
+          (list[i].listener && list[i].listener === listener)) {
+        position = i;
+        break;
+      }
+    }
+
+    if (position < 0)
+      return this;
+
+    if (list.length === 1) {
+      list.length = 0;
+      delete this._events[type];
+    } else {
+      list.splice(position, 1);
+    }
+
+    if (this._events.removeListener)
+      this.emit('removeListener', type, listener);
+  }
+
+  return this;
+};
+
+EventEmitter.prototype.removeAllListeners = function(type) {
+  var key, listeners;
+
+  if (!this._events)
+    return this;
+
+  // not listening for removeListener, no need to emit
+  if (!this._events.removeListener) {
+    if (arguments.length === 0)
+      this._events = {};
+    else if (this._events[type])
+      delete this._events[type];
+    return this;
+  }
+
+  // emit removeListener for all listeners on all events
+  if (arguments.length === 0) {
+    for (key in this._events) {
+      if (key === 'removeListener') continue;
+      this.removeAllListeners(key);
+    }
+    this.removeAllListeners('removeListener');
+    this._events = {};
+    return this;
+  }
+
+  listeners = this._events[type];
+
+  if (isFunction(listeners)) {
+    this.removeListener(type, listeners);
+  } else {
+    // LIFO order
+    while (listeners.length)
+      this.removeListener(type, listeners[listeners.length - 1]);
+  }
+  delete this._events[type];
+
+  return this;
+};
+
+EventEmitter.prototype.listeners = function(type) {
+  var ret;
+  if (!this._events || !this._events[type])
+    ret = [];
+  else if (isFunction(this._events[type]))
+    ret = [this._events[type]];
+  else
+    ret = this._events[type].slice();
+  return ret;
+};
+
+EventEmitter.listenerCount = function(emitter, type) {
+  var ret;
+  if (!emitter._events || !emitter._events[type])
+    ret = 0;
+  else if (isFunction(emitter._events[type]))
+    ret = 1;
+  else
+    ret = emitter._events[type].length;
+  return ret;
+};
+
+function isFunction(arg) {
+  return typeof arg === 'function';
+}
+
+function isNumber(arg) {
+  return typeof arg === 'number';
+}
+
+function isObject(arg) {
+  return typeof arg === 'object' && arg !== null;
+}
+
+function isUndefined(arg) {
+  return arg === void 0;
+}
+
+},{}],2:[function(require,module,exports){
+// shim for using process in browser
+
+var process = module.exports = {};
+var queue = [];
+var draining = false;
+var currentQueue;
+var queueIndex = -1;
+
+function cleanUpNextTick() {
+    draining = false;
+    if (currentQueue.length) {
+        queue = currentQueue.concat(queue);
+    } else {
+        queueIndex = -1;
+    }
+    if (queue.length) {
+        drainQueue();
+    }
+}
+
+function drainQueue() {
+    if (draining) {
+        return;
+    }
+    var timeout = setTimeout(cleanUpNextTick);
+    draining = true;
+
+    var len = queue.length;
+    while(len) {
+        currentQueue = queue;
+        queue = [];
+        while (++queueIndex < len) {
+            if (currentQueue) {
+                currentQueue[queueIndex].run();
+            }
+        }
+        queueIndex = -1;
+        len = queue.length;
+    }
+    currentQueue = null;
+    draining = false;
+    clearTimeout(timeout);
+}
+
+process.nextTick = function (fun) {
+    var args = new Array(arguments.length - 1);
+    if (arguments.length > 1) {
+        for (var i = 1; i < arguments.length; i++) {
+            args[i - 1] = arguments[i];
+        }
+    }
+    queue.push(new Item(fun, args));
+    if (queue.length === 1 && !draining) {
+        setTimeout(drainQueue, 0);
+    }
+};
+
+// v8 likes predictible objects
+function Item(fun, array) {
+    this.fun = fun;
+    this.array = array;
+}
+Item.prototype.run = function () {
+    this.fun.apply(null, this.array);
+};
+process.title = 'browser';
+process.browser = true;
+process.env = {};
+process.argv = [];
+process.version = ''; // empty string to avoid regexp issues
+process.versions = {};
+
+function noop() {}
+
+process.on = noop;
+process.addListener = noop;
+process.once = noop;
+process.off = noop;
+process.removeListener = noop;
+process.removeAllListeners = noop;
+process.emit = noop;
+
+process.binding = function (name) {
+    throw new Error('process.binding is not supported');
+};
+
+process.cwd = function () { return '/' };
+process.chdir = function (dir) {
+    throw new Error('process.chdir is not supported');
+};
+process.umask = function() { return 0; };
+
+},{}],3:[function(require,module,exports){
 module.exports = decodeFloat
 
 var UINT8_VIEW = new Uint8Array(4)
@@ -12,7 +408,7 @@ function decodeFloat(x, y, z, w) {
   return FLOAT_VIEW[0]
 }
 
-},{}],2:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 var inherits = require('inherits')
 var EventEmitter = require('events').EventEmitter
 var now = require('right-now')
@@ -57,7 +453,7 @@ Engine.prototype.tick = function() {
     this.emit('tick', dt)
     this.last = time
 }
-},{"events":12,"inherits":3,"raf":4,"right-now":6}],3:[function(require,module,exports){
+},{"events":1,"inherits":5,"raf":6,"right-now":8}],5:[function(require,module,exports){
 if (typeof Object.create === 'function') {
   // implementation from standard node.js 'util' module
   module.exports = function inherits(ctor, superCtor) {
@@ -82,7 +478,7 @@ if (typeof Object.create === 'function') {
   }
 }
 
-},{}],4:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 var now = require('performance-now')
   , global = typeof window === 'undefined' ? {} : window
   , vendors = ['moz', 'webkit']
@@ -152,7 +548,7 @@ module.exports.cancel = function() {
   caf.apply(global, arguments)
 }
 
-},{"performance-now":5}],5:[function(require,module,exports){
+},{"performance-now":7}],7:[function(require,module,exports){
 (function (process){
 // Generated by CoffeeScript 1.7.1
 (function() {
@@ -188,7 +584,7 @@ module.exports.cancel = function() {
 }).call(this);
 
 }).call(this,require('_process'))
-},{"_process":13}],6:[function(require,module,exports){
+},{"_process":2}],8:[function(require,module,exports){
 (function (global){
 module.exports =
   global.performance &&
@@ -199,7 +595,7 @@ module.exports =
   }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],7:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 //  Ramda v0.19.1
 //  https://github.com/ramda/ramda
 //  (c) 2013-2016 Scott Sauyet, Michael Hurley, and David Chambers
@@ -8647,7 +9043,7 @@ module.exports =
 
 }.call(this));
 
-},{}],8:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 /**
  * @author mrdoob / http://mrdoob.com/
  */
@@ -8833,7 +9229,7 @@ if ( typeof module === 'object' ) {
 
 }
 
-},{}],9:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 /**
  * @author Eberhard Graether / http://egraether.com/
  * @author Mark Lundin / http://mark-lundin.com
@@ -9452,7 +9848,7 @@ function preventEvent( event ) { event.preventDefault(); }
 
 Trackball.prototype = Object.create(THREE.EventDispatcher.prototype);
 
-},{"three":10}],10:[function(require,module,exports){
+},{"three":12}],12:[function(require,module,exports){
 var self = self || {};// File:src/Three.js
 
 /**
@@ -45641,7 +46037,7 @@ if (typeof exports !== 'undefined') {
   this['THREE'] = THREE;
 }
 
-},{}],11:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 /**
  * @license twgl.js 0.0.40 Copyright (c) 2015, Gregg Tavares All Rights Reserved.
  * Available via the MIT license.
@@ -52499,775 +52895,20 @@ define("build/js/twgl-includer-full", function(){});
     return notrequirebecasebrowserifymessesup('main');
 }));
 
-},{}],12:[function(require,module,exports){
-// Copyright Joyent, Inc. and other Node contributors.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a
-// copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to permit
-// persons to whom the Software is furnished to do so, subject to the
-// following conditions:
-//
-// The above copyright notice and this permission notice shall be included
-// in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
-// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
-// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
-// USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-function EventEmitter() {
-  this._events = this._events || {};
-  this._maxListeners = this._maxListeners || undefined;
-}
-module.exports = EventEmitter;
-
-// Backwards-compat with node 0.10.x
-EventEmitter.EventEmitter = EventEmitter;
-
-EventEmitter.prototype._events = undefined;
-EventEmitter.prototype._maxListeners = undefined;
-
-// By default EventEmitters will print a warning if more than 10 listeners are
-// added to it. This is a useful default which helps finding memory leaks.
-EventEmitter.defaultMaxListeners = 10;
-
-// Obviously not all Emitters should be limited to 10. This function allows
-// that to be increased. Set to zero for unlimited.
-EventEmitter.prototype.setMaxListeners = function(n) {
-  if (!isNumber(n) || n < 0 || isNaN(n))
-    throw TypeError('n must be a positive number');
-  this._maxListeners = n;
-  return this;
-};
-
-EventEmitter.prototype.emit = function(type) {
-  var er, handler, len, args, i, listeners;
-
-  if (!this._events)
-    this._events = {};
-
-  // If there is no 'error' event listener then throw.
-  if (type === 'error') {
-    if (!this._events.error ||
-        (isObject(this._events.error) && !this._events.error.length)) {
-      er = arguments[1];
-      if (er instanceof Error) {
-        throw er; // Unhandled 'error' event
-      }
-      throw TypeError('Uncaught, unspecified "error" event.');
-    }
-  }
-
-  handler = this._events[type];
-
-  if (isUndefined(handler))
-    return false;
-
-  if (isFunction(handler)) {
-    switch (arguments.length) {
-      // fast cases
-      case 1:
-        handler.call(this);
-        break;
-      case 2:
-        handler.call(this, arguments[1]);
-        break;
-      case 3:
-        handler.call(this, arguments[1], arguments[2]);
-        break;
-      // slower
-      default:
-        args = Array.prototype.slice.call(arguments, 1);
-        handler.apply(this, args);
-    }
-  } else if (isObject(handler)) {
-    args = Array.prototype.slice.call(arguments, 1);
-    listeners = handler.slice();
-    len = listeners.length;
-    for (i = 0; i < len; i++)
-      listeners[i].apply(this, args);
-  }
-
-  return true;
-};
-
-EventEmitter.prototype.addListener = function(type, listener) {
-  var m;
-
-  if (!isFunction(listener))
-    throw TypeError('listener must be a function');
-
-  if (!this._events)
-    this._events = {};
-
-  // To avoid recursion in the case that type === "newListener"! Before
-  // adding it to the listeners, first emit "newListener".
-  if (this._events.newListener)
-    this.emit('newListener', type,
-              isFunction(listener.listener) ?
-              listener.listener : listener);
-
-  if (!this._events[type])
-    // Optimize the case of one listener. Don't need the extra array object.
-    this._events[type] = listener;
-  else if (isObject(this._events[type]))
-    // If we've already got an array, just append.
-    this._events[type].push(listener);
-  else
-    // Adding the second element, need to change to array.
-    this._events[type] = [this._events[type], listener];
-
-  // Check for listener leak
-  if (isObject(this._events[type]) && !this._events[type].warned) {
-    if (!isUndefined(this._maxListeners)) {
-      m = this._maxListeners;
-    } else {
-      m = EventEmitter.defaultMaxListeners;
-    }
-
-    if (m && m > 0 && this._events[type].length > m) {
-      this._events[type].warned = true;
-      console.error('(node) warning: possible EventEmitter memory ' +
-                    'leak detected. %d listeners added. ' +
-                    'Use emitter.setMaxListeners() to increase limit.',
-                    this._events[type].length);
-      if (typeof console.trace === 'function') {
-        // not supported in IE 10
-        console.trace();
-      }
-    }
-  }
-
-  return this;
-};
-
-EventEmitter.prototype.on = EventEmitter.prototype.addListener;
-
-EventEmitter.prototype.once = function(type, listener) {
-  if (!isFunction(listener))
-    throw TypeError('listener must be a function');
-
-  var fired = false;
-
-  function g() {
-    this.removeListener(type, g);
-
-    if (!fired) {
-      fired = true;
-      listener.apply(this, arguments);
-    }
-  }
-
-  g.listener = listener;
-  this.on(type, g);
-
-  return this;
-};
-
-// emits a 'removeListener' event iff the listener was removed
-EventEmitter.prototype.removeListener = function(type, listener) {
-  var list, position, length, i;
-
-  if (!isFunction(listener))
-    throw TypeError('listener must be a function');
-
-  if (!this._events || !this._events[type])
-    return this;
-
-  list = this._events[type];
-  length = list.length;
-  position = -1;
-
-  if (list === listener ||
-      (isFunction(list.listener) && list.listener === listener)) {
-    delete this._events[type];
-    if (this._events.removeListener)
-      this.emit('removeListener', type, listener);
-
-  } else if (isObject(list)) {
-    for (i = length; i-- > 0;) {
-      if (list[i] === listener ||
-          (list[i].listener && list[i].listener === listener)) {
-        position = i;
-        break;
-      }
-    }
-
-    if (position < 0)
-      return this;
-
-    if (list.length === 1) {
-      list.length = 0;
-      delete this._events[type];
-    } else {
-      list.splice(position, 1);
-    }
-
-    if (this._events.removeListener)
-      this.emit('removeListener', type, listener);
-  }
-
-  return this;
-};
-
-EventEmitter.prototype.removeAllListeners = function(type) {
-  var key, listeners;
-
-  if (!this._events)
-    return this;
-
-  // not listening for removeListener, no need to emit
-  if (!this._events.removeListener) {
-    if (arguments.length === 0)
-      this._events = {};
-    else if (this._events[type])
-      delete this._events[type];
-    return this;
-  }
-
-  // emit removeListener for all listeners on all events
-  if (arguments.length === 0) {
-    for (key in this._events) {
-      if (key === 'removeListener') continue;
-      this.removeAllListeners(key);
-    }
-    this.removeAllListeners('removeListener');
-    this._events = {};
-    return this;
-  }
-
-  listeners = this._events[type];
-
-  if (isFunction(listeners)) {
-    this.removeListener(type, listeners);
-  } else if (listeners) {
-    // LIFO order
-    while (listeners.length)
-      this.removeListener(type, listeners[listeners.length - 1]);
-  }
-  delete this._events[type];
-
-  return this;
-};
-
-EventEmitter.prototype.listeners = function(type) {
-  var ret;
-  if (!this._events || !this._events[type])
-    ret = [];
-  else if (isFunction(this._events[type]))
-    ret = [this._events[type]];
-  else
-    ret = this._events[type].slice();
-  return ret;
-};
-
-EventEmitter.prototype.listenerCount = function(type) {
-  if (this._events) {
-    var evlistener = this._events[type];
-
-    if (isFunction(evlistener))
-      return 1;
-    else if (evlistener)
-      return evlistener.length;
-  }
-  return 0;
-};
-
-EventEmitter.listenerCount = function(emitter, type) {
-  return emitter.listenerCount(type);
-};
-
-function isFunction(arg) {
-  return typeof arg === 'function';
-}
-
-function isNumber(arg) {
-  return typeof arg === 'number';
-}
-
-function isObject(arg) {
-  return typeof arg === 'object' && arg !== null;
-}
-
-function isUndefined(arg) {
-  return arg === void 0;
-}
-
-},{}],13:[function(require,module,exports){
-// shim for using process in browser
-
-var process = module.exports = {};
-var queue = [];
-var draining = false;
-var currentQueue;
-var queueIndex = -1;
-
-function cleanUpNextTick() {
-    draining = false;
-    if (currentQueue.length) {
-        queue = currentQueue.concat(queue);
-    } else {
-        queueIndex = -1;
-    }
-    if (queue.length) {
-        drainQueue();
-    }
-}
-
-function drainQueue() {
-    if (draining) {
-        return;
-    }
-    var timeout = setTimeout(cleanUpNextTick);
-    draining = true;
-
-    var len = queue.length;
-    while(len) {
-        currentQueue = queue;
-        queue = [];
-        while (++queueIndex < len) {
-            if (currentQueue) {
-                currentQueue[queueIndex].run();
-            }
-        }
-        queueIndex = -1;
-        len = queue.length;
-    }
-    currentQueue = null;
-    draining = false;
-    clearTimeout(timeout);
-}
-
-process.nextTick = function (fun) {
-    var args = new Array(arguments.length - 1);
-    if (arguments.length > 1) {
-        for (var i = 1; i < arguments.length; i++) {
-            args[i - 1] = arguments[i];
-        }
-    }
-    queue.push(new Item(fun, args));
-    if (queue.length === 1 && !draining) {
-        setTimeout(drainQueue, 0);
-    }
-};
-
-// v8 likes predictible objects
-function Item(fun, array) {
-    this.fun = fun;
-    this.array = array;
-}
-Item.prototype.run = function () {
-    this.fun.apply(null, this.array);
-};
-process.title = 'browser';
-process.browser = true;
-process.env = {};
-process.argv = [];
-process.version = ''; // empty string to avoid regexp issues
-process.versions = {};
-
-function noop() {}
-
-process.on = noop;
-process.addListener = noop;
-process.once = noop;
-process.off = noop;
-process.removeListener = noop;
-process.removeAllListeners = noop;
-process.emit = noop;
-
-process.binding = function (name) {
-    throw new Error('process.binding is not supported');
-};
-
-process.cwd = function () { return '/' };
-process.chdir = function (dir) {
-    throw new Error('process.chdir is not supported');
-};
-process.umask = function() { return 0; };
-
 },{}],14:[function(require,module,exports){
 "use strict";
 
 var twgl = require("twgl.js");
 
 var Scene = require('./scene');
+var WorkerPool = require('./worker-pool');
 var R = require('ramda');
 var unpackFloat = require("glsl-read-float");
 
-var edgeTable = [
-    0x0  , 0x109, 0x203, 0x30a, 0x406, 0x50f, 0x605, 0x70c,
-    0x80c, 0x905, 0xa0f, 0xb06, 0xc0a, 0xd03, 0xe09, 0xf00,
-    0x190, 0x99 , 0x393, 0x29a, 0x596, 0x49f, 0x795, 0x69c,
-    0x99c, 0x895, 0xb9f, 0xa96, 0xd9a, 0xc93, 0xf99, 0xe90,
-    0x230, 0x339, 0x33 , 0x13a, 0x636, 0x73f, 0x435, 0x53c,
-    0xa3c, 0xb35, 0x83f, 0x936, 0xe3a, 0xf33, 0xc39, 0xd30,
-    0x3a0, 0x2a9, 0x1a3, 0xaa , 0x7a6, 0x6af, 0x5a5, 0x4ac,
-    0xbac, 0xaa5, 0x9af, 0x8a6, 0xfaa, 0xea3, 0xda9, 0xca0,
-    0x460, 0x569, 0x663, 0x76a, 0x66 , 0x16f, 0x265, 0x36c,
-    0xc6c, 0xd65, 0xe6f, 0xf66, 0x86a, 0x963, 0xa69, 0xb60,
-    0x5f0, 0x4f9, 0x7f3, 0x6fa, 0x1f6, 0xff , 0x3f5, 0x2fc,
-    0xdfc, 0xcf5, 0xfff, 0xef6, 0x9fa, 0x8f3, 0xbf9, 0xaf0,
-    0x650, 0x759, 0x453, 0x55a, 0x256, 0x35f, 0x55 , 0x15c,
-    0xe5c, 0xf55, 0xc5f, 0xd56, 0xa5a, 0xb53, 0x859, 0x950,
-    0x7c0, 0x6c9, 0x5c3, 0x4ca, 0x3c6, 0x2cf, 0x1c5, 0xcc ,
-    0xfcc, 0xec5, 0xdcf, 0xcc6, 0xbca, 0xac3, 0x9c9, 0x8c0,
-    0x8c0, 0x9c9, 0xac3, 0xbca, 0xcc6, 0xdcf, 0xec5, 0xfcc,
-    0xcc , 0x1c5, 0x2cf, 0x3c6, 0x4ca, 0x5c3, 0x6c9, 0x7c0,
-    0x950, 0x859, 0xb53, 0xa5a, 0xd56, 0xc5f, 0xf55, 0xe5c,
-    0x15c, 0x55 , 0x35f, 0x256, 0x55a, 0x453, 0x759, 0x650,
-    0xaf0, 0xbf9, 0x8f3, 0x9fa, 0xef6, 0xfff, 0xcf5, 0xdfc,
-    0x2fc, 0x3f5, 0xff , 0x1f6, 0x6fa, 0x7f3, 0x4f9, 0x5f0,
-    0xb60, 0xa69, 0x963, 0x86a, 0xf66, 0xe6f, 0xd65, 0xc6c,
-    0x36c, 0x265, 0x16f, 0x66 , 0x76a, 0x663, 0x569, 0x460,
-    0xca0, 0xda9, 0xea3, 0xfaa, 0x8a6, 0x9af, 0xaa5, 0xbac,
-    0x4ac, 0x5a5, 0x6af, 0x7a6, 0xaa , 0x1a3, 0x2a9, 0x3a0,
-    0xd30, 0xc39, 0xf33, 0xe3a, 0x936, 0x83f, 0xb35, 0xa3c,
-    0x53c, 0x435, 0x73f, 0x636, 0x13a, 0x33 , 0x339, 0x230,
-    0xe90, 0xf99, 0xc93, 0xd9a, 0xa96, 0xb9f, 0x895, 0x99c,
-    0x69c, 0x795, 0x49f, 0x596, 0x29a, 0x393, 0x99 , 0x190,
-    0xf00, 0xe09, 0xd03, 0xc0a, 0xb06, 0xa0f, 0x905, 0x80c,
-    0x70c, 0x605, 0x50f, 0x406, 0x30a, 0x203, 0x109, 0x0
-];
-
-var triTable = [
-    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    0, 8, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    0, 1, 9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    1, 8, 3, 9, 8, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    1, 2, 10, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    0, 8, 3, 1, 2, 10, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    9, 2, 10, 0, 2, 9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    2, 8, 3, 2, 10, 8, 10, 9, 8, -1, -1, -1, -1, -1, -1, -1,
-    3, 11, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    0, 11, 2, 8, 11, 0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    1, 9, 0, 2, 3, 11, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    1, 11, 2, 1, 9, 11, 9, 8, 11, -1, -1, -1, -1, -1, -1, -1,
-    3, 10, 1, 11, 10, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    0, 10, 1, 0, 8, 10, 8, 11, 10, -1, -1, -1, -1, -1, -1, -1,
-    3, 9, 0, 3, 11, 9, 11, 10, 9, -1, -1, -1, -1, -1, -1, -1,
-    9, 8, 10, 10, 8, 11, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    4, 7, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    4, 3, 0, 7, 3, 4, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    0, 1, 9, 8, 4, 7, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    4, 1, 9, 4, 7, 1, 7, 3, 1, -1, -1, -1, -1, -1, -1, -1,
-    1, 2, 10, 8, 4, 7, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    3, 4, 7, 3, 0, 4, 1, 2, 10, -1, -1, -1, -1, -1, -1, -1,
-    9, 2, 10, 9, 0, 2, 8, 4, 7, -1, -1, -1, -1, -1, -1, -1,
-    2, 10, 9, 2, 9, 7, 2, 7, 3, 7, 9, 4, -1, -1, -1, -1,
-    8, 4, 7, 3, 11, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    11, 4, 7, 11, 2, 4, 2, 0, 4, -1, -1, -1, -1, -1, -1, -1,
-    9, 0, 1, 8, 4, 7, 2, 3, 11, -1, -1, -1, -1, -1, -1, -1,
-    4, 7, 11, 9, 4, 11, 9, 11, 2, 9, 2, 1, -1, -1, -1, -1,
-    3, 10, 1, 3, 11, 10, 7, 8, 4, -1, -1, -1, -1, -1, -1, -1,
-    1, 11, 10, 1, 4, 11, 1, 0, 4, 7, 11, 4, -1, -1, -1, -1,
-    4, 7, 8, 9, 0, 11, 9, 11, 10, 11, 0, 3, -1, -1, -1, -1,
-    4, 7, 11, 4, 11, 9, 9, 11, 10, -1, -1, -1, -1, -1, -1, -1,
-    9, 5, 4, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    9, 5, 4, 0, 8, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    0, 5, 4, 1, 5, 0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    8, 5, 4, 8, 3, 5, 3, 1, 5, -1, -1, -1, -1, -1, -1, -1,
-    1, 2, 10, 9, 5, 4, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    3, 0, 8, 1, 2, 10, 4, 9, 5, -1, -1, -1, -1, -1, -1, -1,
-    5, 2, 10, 5, 4, 2, 4, 0, 2, -1, -1, -1, -1, -1, -1, -1,
-    2, 10, 5, 3, 2, 5, 3, 5, 4, 3, 4, 8, -1, -1, -1, -1,
-    9, 5, 4, 2, 3, 11, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    0, 11, 2, 0, 8, 11, 4, 9, 5, -1, -1, -1, -1, -1, -1, -1,
-    0, 5, 4, 0, 1, 5, 2, 3, 11, -1, -1, -1, -1, -1, -1, -1,
-    2, 1, 5, 2, 5, 8, 2, 8, 11, 4, 8, 5, -1, -1, -1, -1,
-    10, 3, 11, 10, 1, 3, 9, 5, 4, -1, -1, -1, -1, -1, -1, -1,
-    4, 9, 5, 0, 8, 1, 8, 10, 1, 8, 11, 10, -1, -1, -1, -1,
-    5, 4, 0, 5, 0, 11, 5, 11, 10, 11, 0, 3, -1, -1, -1, -1,
-    5, 4, 8, 5, 8, 10, 10, 8, 11, -1, -1, -1, -1, -1, -1, -1,
-    9, 7, 8, 5, 7, 9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    9, 3, 0, 9, 5, 3, 5, 7, 3, -1, -1, -1, -1, -1, -1, -1,
-    0, 7, 8, 0, 1, 7, 1, 5, 7, -1, -1, -1, -1, -1, -1, -1,
-    1, 5, 3, 3, 5, 7, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    9, 7, 8, 9, 5, 7, 10, 1, 2, -1, -1, -1, -1, -1, -1, -1,
-    10, 1, 2, 9, 5, 0, 5, 3, 0, 5, 7, 3, -1, -1, -1, -1,
-    8, 0, 2, 8, 2, 5, 8, 5, 7, 10, 5, 2, -1, -1, -1, -1,
-    2, 10, 5, 2, 5, 3, 3, 5, 7, -1, -1, -1, -1, -1, -1, -1,
-    7, 9, 5, 7, 8, 9, 3, 11, 2, -1, -1, -1, -1, -1, -1, -1,
-    9, 5, 7, 9, 7, 2, 9, 2, 0, 2, 7, 11, -1, -1, -1, -1,
-    2, 3, 11, 0, 1, 8, 1, 7, 8, 1, 5, 7, -1, -1, -1, -1,
-    11, 2, 1, 11, 1, 7, 7, 1, 5, -1, -1, -1, -1, -1, -1, -1,
-    9, 5, 8, 8, 5, 7, 10, 1, 3, 10, 3, 11, -1, -1, -1, -1,
-    5, 7, 0, 5, 0, 9, 7, 11, 0, 1, 0, 10, 11, 10, 0, -1,
-    11, 10, 0, 11, 0, 3, 10, 5, 0, 8, 0, 7, 5, 7, 0, -1,
-    11, 10, 5, 7, 11, 5, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    10, 6, 5, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    0, 8, 3, 5, 10, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    9, 0, 1, 5, 10, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    1, 8, 3, 1, 9, 8, 5, 10, 6, -1, -1, -1, -1, -1, -1, -1,
-    1, 6, 5, 2, 6, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    1, 6, 5, 1, 2, 6, 3, 0, 8, -1, -1, -1, -1, -1, -1, -1,
-    9, 6, 5, 9, 0, 6, 0, 2, 6, -1, -1, -1, -1, -1, -1, -1,
-    5, 9, 8, 5, 8, 2, 5, 2, 6, 3, 2, 8, -1, -1, -1, -1,
-    2, 3, 11, 10, 6, 5, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    11, 0, 8, 11, 2, 0, 10, 6, 5, -1, -1, -1, -1, -1, -1, -1,
-    0, 1, 9, 2, 3, 11, 5, 10, 6, -1, -1, -1, -1, -1, -1, -1,
-    5, 10, 6, 1, 9, 2, 9, 11, 2, 9, 8, 11, -1, -1, -1, -1,
-    6, 3, 11, 6, 5, 3, 5, 1, 3, -1, -1, -1, -1, -1, -1, -1,
-    0, 8, 11, 0, 11, 5, 0, 5, 1, 5, 11, 6, -1, -1, -1, -1,
-    3, 11, 6, 0, 3, 6, 0, 6, 5, 0, 5, 9, -1, -1, -1, -1,
-    6, 5, 9, 6, 9, 11, 11, 9, 8, -1, -1, -1, -1, -1, -1, -1,
-    5, 10, 6, 4, 7, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    4, 3, 0, 4, 7, 3, 6, 5, 10, -1, -1, -1, -1, -1, -1, -1,
-    1, 9, 0, 5, 10, 6, 8, 4, 7, -1, -1, -1, -1, -1, -1, -1,
-    10, 6, 5, 1, 9, 7, 1, 7, 3, 7, 9, 4, -1, -1, -1, -1,
-    6, 1, 2, 6, 5, 1, 4, 7, 8, -1, -1, -1, -1, -1, -1, -1,
-    1, 2, 5, 5, 2, 6, 3, 0, 4, 3, 4, 7, -1, -1, -1, -1,
-    8, 4, 7, 9, 0, 5, 0, 6, 5, 0, 2, 6, -1, -1, -1, -1,
-    7, 3, 9, 7, 9, 4, 3, 2, 9, 5, 9, 6, 2, 6, 9, -1,
-    3, 11, 2, 7, 8, 4, 10, 6, 5, -1, -1, -1, -1, -1, -1, -1,
-    5, 10, 6, 4, 7, 2, 4, 2, 0, 2, 7, 11, -1, -1, -1, -1,
-    0, 1, 9, 4, 7, 8, 2, 3, 11, 5, 10, 6, -1, -1, -1, -1,
-    9, 2, 1, 9, 11, 2, 9, 4, 11, 7, 11, 4, 5, 10, 6, -1,
-    8, 4, 7, 3, 11, 5, 3, 5, 1, 5, 11, 6, -1, -1, -1, -1,
-    5, 1, 11, 5, 11, 6, 1, 0, 11, 7, 11, 4, 0, 4, 11, -1,
-    0, 5, 9, 0, 6, 5, 0, 3, 6, 11, 6, 3, 8, 4, 7, -1,
-    6, 5, 9, 6, 9, 11, 4, 7, 9, 7, 11, 9, -1, -1, -1, -1,
-    10, 4, 9, 6, 4, 10, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    4, 10, 6, 4, 9, 10, 0, 8, 3, -1, -1, -1, -1, -1, -1, -1,
-    10, 0, 1, 10, 6, 0, 6, 4, 0, -1, -1, -1, -1, -1, -1, -1,
-    8, 3, 1, 8, 1, 6, 8, 6, 4, 6, 1, 10, -1, -1, -1, -1,
-    1, 4, 9, 1, 2, 4, 2, 6, 4, -1, -1, -1, -1, -1, -1, -1,
-    3, 0, 8, 1, 2, 9, 2, 4, 9, 2, 6, 4, -1, -1, -1, -1,
-    0, 2, 4, 4, 2, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    8, 3, 2, 8, 2, 4, 4, 2, 6, -1, -1, -1, -1, -1, -1, -1,
-    10, 4, 9, 10, 6, 4, 11, 2, 3, -1, -1, -1, -1, -1, -1, -1,
-    0, 8, 2, 2, 8, 11, 4, 9, 10, 4, 10, 6, -1, -1, -1, -1,
-    3, 11, 2, 0, 1, 6, 0, 6, 4, 6, 1, 10, -1, -1, -1, -1,
-    6, 4, 1, 6, 1, 10, 4, 8, 1, 2, 1, 11, 8, 11, 1, -1,
-    9, 6, 4, 9, 3, 6, 9, 1, 3, 11, 6, 3, -1, -1, -1, -1,
-    8, 11, 1, 8, 1, 0, 11, 6, 1, 9, 1, 4, 6, 4, 1, -1,
-    3, 11, 6, 3, 6, 0, 0, 6, 4, -1, -1, -1, -1, -1, -1, -1,
-    6, 4, 8, 11, 6, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    7, 10, 6, 7, 8, 10, 8, 9, 10, -1, -1, -1, -1, -1, -1, -1,
-    0, 7, 3, 0, 10, 7, 0, 9, 10, 6, 7, 10, -1, -1, -1, -1,
-    10, 6, 7, 1, 10, 7, 1, 7, 8, 1, 8, 0, -1, -1, -1, -1,
-    10, 6, 7, 10, 7, 1, 1, 7, 3, -1, -1, -1, -1, -1, -1, -1,
-    1, 2, 6, 1, 6, 8, 1, 8, 9, 8, 6, 7, -1, -1, -1, -1,
-    2, 6, 9, 2, 9, 1, 6, 7, 9, 0, 9, 3, 7, 3, 9, -1,
-    7, 8, 0, 7, 0, 6, 6, 0, 2, -1, -1, -1, -1, -1, -1, -1,
-    7, 3, 2, 6, 7, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    2, 3, 11, 10, 6, 8, 10, 8, 9, 8, 6, 7, -1, -1, -1, -1,
-    2, 0, 7, 2, 7, 11, 0, 9, 7, 6, 7, 10, 9, 10, 7, -1,
-    1, 8, 0, 1, 7, 8, 1, 10, 7, 6, 7, 10, 2, 3, 11, -1,
-    11, 2, 1, 11, 1, 7, 10, 6, 1, 6, 7, 1, -1, -1, -1, -1,
-    8, 9, 6, 8, 6, 7, 9, 1, 6, 11, 6, 3, 1, 3, 6, -1,
-    0, 9, 1, 11, 6, 7, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    7, 8, 0, 7, 0, 6, 3, 11, 0, 11, 6, 0, -1, -1, -1, -1,
-    7, 11, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    7, 6, 11, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    3, 0, 8, 11, 7, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    0, 1, 9, 11, 7, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    8, 1, 9, 8, 3, 1, 11, 7, 6, -1, -1, -1, -1, -1, -1, -1,
-    10, 1, 2, 6, 11, 7, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    1, 2, 10, 3, 0, 8, 6, 11, 7, -1, -1, -1, -1, -1, -1, -1,
-    2, 9, 0, 2, 10, 9, 6, 11, 7, -1, -1, -1, -1, -1, -1, -1,
-    6, 11, 7, 2, 10, 3, 10, 8, 3, 10, 9, 8, -1, -1, -1, -1,
-    7, 2, 3, 6, 2, 7, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    7, 0, 8, 7, 6, 0, 6, 2, 0, -1, -1, -1, -1, -1, -1, -1,
-    2, 7, 6, 2, 3, 7, 0, 1, 9, -1, -1, -1, -1, -1, -1, -1,
-    1, 6, 2, 1, 8, 6, 1, 9, 8, 8, 7, 6, -1, -1, -1, -1,
-    10, 7, 6, 10, 1, 7, 1, 3, 7, -1, -1, -1, -1, -1, -1, -1,
-    10, 7, 6, 1, 7, 10, 1, 8, 7, 1, 0, 8, -1, -1, -1, -1,
-    0, 3, 7, 0, 7, 10, 0, 10, 9, 6, 10, 7, -1, -1, -1, -1,
-    7, 6, 10, 7, 10, 8, 8, 10, 9, -1, -1, -1, -1, -1, -1, -1,
-    6, 8, 4, 11, 8, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    3, 6, 11, 3, 0, 6, 0, 4, 6, -1, -1, -1, -1, -1, -1, -1,
-    8, 6, 11, 8, 4, 6, 9, 0, 1, -1, -1, -1, -1, -1, -1, -1,
-    9, 4, 6, 9, 6, 3, 9, 3, 1, 11, 3, 6, -1, -1, -1, -1,
-    6, 8, 4, 6, 11, 8, 2, 10, 1, -1, -1, -1, -1, -1, -1, -1,
-    1, 2, 10, 3, 0, 11, 0, 6, 11, 0, 4, 6, -1, -1, -1, -1,
-    4, 11, 8, 4, 6, 11, 0, 2, 9, 2, 10, 9, -1, -1, -1, -1,
-    10, 9, 3, 10, 3, 2, 9, 4, 3, 11, 3, 6, 4, 6, 3, -1,
-    8, 2, 3, 8, 4, 2, 4, 6, 2, -1, -1, -1, -1, -1, -1, -1,
-    0, 4, 2, 4, 6, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    1, 9, 0, 2, 3, 4, 2, 4, 6, 4, 3, 8, -1, -1, -1, -1,
-    1, 9, 4, 1, 4, 2, 2, 4, 6, -1, -1, -1, -1, -1, -1, -1,
-    8, 1, 3, 8, 6, 1, 8, 4, 6, 6, 10, 1, -1, -1, -1, -1,
-    10, 1, 0, 10, 0, 6, 6, 0, 4, -1, -1, -1, -1, -1, -1, -1,
-    4, 6, 3, 4, 3, 8, 6, 10, 3, 0, 3, 9, 10, 9, 3, -1,
-    10, 9, 4, 6, 10, 4, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    4, 9, 5, 7, 6, 11, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    0, 8, 3, 4, 9, 5, 11, 7, 6, -1, -1, -1, -1, -1, -1, -1,
-    5, 0, 1, 5, 4, 0, 7, 6, 11, -1, -1, -1, -1, -1, -1, -1,
-    11, 7, 6, 8, 3, 4, 3, 5, 4, 3, 1, 5, -1, -1, -1, -1,
-    9, 5, 4, 10, 1, 2, 7, 6, 11, -1, -1, -1, -1, -1, -1, -1,
-    6, 11, 7, 1, 2, 10, 0, 8, 3, 4, 9, 5, -1, -1, -1, -1,
-    7, 6, 11, 5, 4, 10, 4, 2, 10, 4, 0, 2, -1, -1, -1, -1,
-    3, 4, 8, 3, 5, 4, 3, 2, 5, 10, 5, 2, 11, 7, 6, -1,
-    7, 2, 3, 7, 6, 2, 5, 4, 9, -1, -1, -1, -1, -1, -1, -1,
-    9, 5, 4, 0, 8, 6, 0, 6, 2, 6, 8, 7, -1, -1, -1, -1,
-    3, 6, 2, 3, 7, 6, 1, 5, 0, 5, 4, 0, -1, -1, -1, -1,
-    6, 2, 8, 6, 8, 7, 2, 1, 8, 4, 8, 5, 1, 5, 8, -1,
-    9, 5, 4, 10, 1, 6, 1, 7, 6, 1, 3, 7, -1, -1, -1, -1,
-    1, 6, 10, 1, 7, 6, 1, 0, 7, 8, 7, 0, 9, 5, 4, -1,
-    4, 0, 10, 4, 10, 5, 0, 3, 10, 6, 10, 7, 3, 7, 10, -1,
-    7, 6, 10, 7, 10, 8, 5, 4, 10, 4, 8, 10, -1, -1, -1, -1,
-    6, 9, 5, 6, 11, 9, 11, 8, 9, -1, -1, -1, -1, -1, -1, -1,
-    3, 6, 11, 0, 6, 3, 0, 5, 6, 0, 9, 5, -1, -1, -1, -1,
-    0, 11, 8, 0, 5, 11, 0, 1, 5, 5, 6, 11, -1, -1, -1, -1,
-    6, 11, 3, 6, 3, 5, 5, 3, 1, -1, -1, -1, -1, -1, -1, -1,
-    1, 2, 10, 9, 5, 11, 9, 11, 8, 11, 5, 6, -1, -1, -1, -1,
-    0, 11, 3, 0, 6, 11, 0, 9, 6, 5, 6, 9, 1, 2, 10, -1,
-    11, 8, 5, 11, 5, 6, 8, 0, 5, 10, 5, 2, 0, 2, 5, -1,
-    6, 11, 3, 6, 3, 5, 2, 10, 3, 10, 5, 3, -1, -1, -1, -1,
-    5, 8, 9, 5, 2, 8, 5, 6, 2, 3, 8, 2, -1, -1, -1, -1,
-    9, 5, 6, 9, 6, 0, 0, 6, 2, -1, -1, -1, -1, -1, -1, -1,
-    1, 5, 8, 1, 8, 0, 5, 6, 8, 3, 8, 2, 6, 2, 8, -1,
-    1, 5, 6, 2, 1, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    1, 3, 6, 1, 6, 10, 3, 8, 6, 5, 6, 9, 8, 9, 6, -1,
-    10, 1, 0, 10, 0, 6, 9, 5, 0, 5, 6, 0, -1, -1, -1, -1,
-    0, 3, 8, 5, 6, 10, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    10, 5, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    11, 5, 10, 7, 5, 11, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    11, 5, 10, 11, 7, 5, 8, 3, 0, -1, -1, -1, -1, -1, -1, -1,
-    5, 11, 7, 5, 10, 11, 1, 9, 0, -1, -1, -1, -1, -1, -1, -1,
-    10, 7, 5, 10, 11, 7, 9, 8, 1, 8, 3, 1, -1, -1, -1, -1,
-    11, 1, 2, 11, 7, 1, 7, 5, 1, -1, -1, -1, -1, -1, -1, -1,
-    0, 8, 3, 1, 2, 7, 1, 7, 5, 7, 2, 11, -1, -1, -1, -1,
-    9, 7, 5, 9, 2, 7, 9, 0, 2, 2, 11, 7, -1, -1, -1, -1,
-    7, 5, 2, 7, 2, 11, 5, 9, 2, 3, 2, 8, 9, 8, 2, -1,
-    2, 5, 10, 2, 3, 5, 3, 7, 5, -1, -1, -1, -1, -1, -1, -1,
-    8, 2, 0, 8, 5, 2, 8, 7, 5, 10, 2, 5, -1, -1, -1, -1,
-    9, 0, 1, 5, 10, 3, 5, 3, 7, 3, 10, 2, -1, -1, -1, -1,
-    9, 8, 2, 9, 2, 1, 8, 7, 2, 10, 2, 5, 7, 5, 2, -1,
-    1, 3, 5, 3, 7, 5, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    0, 8, 7, 0, 7, 1, 1, 7, 5, -1, -1, -1, -1, -1, -1, -1,
-    9, 0, 3, 9, 3, 5, 5, 3, 7, -1, -1, -1, -1, -1, -1, -1,
-    9, 8, 7, 5, 9, 7, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    5, 8, 4, 5, 10, 8, 10, 11, 8, -1, -1, -1, -1, -1, -1, -1,
-    5, 0, 4, 5, 11, 0, 5, 10, 11, 11, 3, 0, -1, -1, -1, -1,
-    0, 1, 9, 8, 4, 10, 8, 10, 11, 10, 4, 5, -1, -1, -1, -1,
-    10, 11, 4, 10, 4, 5, 11, 3, 4, 9, 4, 1, 3, 1, 4, -1,
-    2, 5, 1, 2, 8, 5, 2, 11, 8, 4, 5, 8, -1, -1, -1, -1,
-    0, 4, 11, 0, 11, 3, 4, 5, 11, 2, 11, 1, 5, 1, 11, -1,
-    0, 2, 5, 0, 5, 9, 2, 11, 5, 4, 5, 8, 11, 8, 5, -1,
-    9, 4, 5, 2, 11, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    2, 5, 10, 3, 5, 2, 3, 4, 5, 3, 8, 4, -1, -1, -1, -1,
-    5, 10, 2, 5, 2, 4, 4, 2, 0, -1, -1, -1, -1, -1, -1, -1,
-    3, 10, 2, 3, 5, 10, 3, 8, 5, 4, 5, 8, 0, 1, 9, -1,
-    5, 10, 2, 5, 2, 4, 1, 9, 2, 9, 4, 2, -1, -1, -1, -1,
-    8, 4, 5, 8, 5, 3, 3, 5, 1, -1, -1, -1, -1, -1, -1, -1,
-    0, 4, 5, 1, 0, 5, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    8, 4, 5, 8, 5, 3, 9, 0, 5, 0, 3, 5, -1, -1, -1, -1,
-    9, 4, 5, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    4, 11, 7, 4, 9, 11, 9, 10, 11, -1, -1, -1, -1, -1, -1, -1,
-    0, 8, 3, 4, 9, 7, 9, 11, 7, 9, 10, 11, -1, -1, -1, -1,
-    1, 10, 11, 1, 11, 4, 1, 4, 0, 7, 4, 11, -1, -1, -1, -1,
-    3, 1, 4, 3, 4, 8, 1, 10, 4, 7, 4, 11, 10, 11, 4, -1,
-    4, 11, 7, 9, 11, 4, 9, 2, 11, 9, 1, 2, -1, -1, -1, -1,
-    9, 7, 4, 9, 11, 7, 9, 1, 11, 2, 11, 1, 0, 8, 3, -1,
-    11, 7, 4, 11, 4, 2, 2, 4, 0, -1, -1, -1, -1, -1, -1, -1,
-    11, 7, 4, 11, 4, 2, 8, 3, 4, 3, 2, 4, -1, -1, -1, -1,
-    2, 9, 10, 2, 7, 9, 2, 3, 7, 7, 4, 9, -1, -1, -1, -1,
-    9, 10, 7, 9, 7, 4, 10, 2, 7, 8, 7, 0, 2, 0, 7, -1,
-    3, 7, 10, 3, 10, 2, 7, 4, 10, 1, 10, 0, 4, 0, 10, -1,
-    1, 10, 2, 8, 7, 4, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    4, 9, 1, 4, 1, 7, 7, 1, 3, -1, -1, -1, -1, -1, -1, -1,
-    4, 9, 1, 4, 1, 7, 0, 8, 1, 8, 7, 1, -1, -1, -1, -1,
-    4, 0, 3, 7, 4, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    4, 8, 7, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    9, 10, 8, 10, 11, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    3, 0, 9, 3, 9, 11, 11, 9, 10, -1, -1, -1, -1, -1, -1, -1,
-    0, 1, 10, 0, 10, 8, 8, 10, 11, -1, -1, -1, -1, -1, -1, -1,
-    3, 1, 10, 11, 3, 10, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    1, 2, 11, 1, 11, 9, 9, 11, 8, -1, -1, -1, -1, -1, -1, -1,
-    3, 0, 9, 3, 9, 11, 1, 2, 9, 2, 11, 9, -1, -1, -1, -1,
-    0, 2, 11, 8, 0, 11, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    3, 2, 11, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    2, 3, 8, 2, 8, 10, 10, 8, 9, -1, -1, -1, -1, -1, -1, -1,
-    9, 10, 2, 0, 9, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    2, 3, 8, 2, 8, 10, 0, 1, 8, 1, 10, 8, -1, -1, -1, -1,
-    1, 10, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    1, 3, 8, 9, 1, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    0, 9, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    0, 3, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
-];
-
-var cubeVerts = [
-    0, 0, 0,
-    1, 0, 0,
-    1, 1, 0,
-    0, 1, 0,
-    0, 0, 1,
-    1, 0, 1,
-    1, 1, 1,
-    0, 1, 1
-];
-
-// Roll cubeverts into this
-
-var edgeIndices = [
-    0, 1,
-    1, 2,
-    2, 3,
-    3, 0,
-    4, 5,
-    5, 6,
-    6, 7,
-    7, 4,
-    0, 4,
-    1, 5,
-    2, 6,
-    3, 7
-];
-
-var toBaseArray = function(base, length, number) {
-    var bits = new Array(length);
-    var bit;
-    var quotient;
-    for (var i = 0; i < length; i++) {
-        bit = number % base;
-        quotient = Math.floor(number / base);
-        bits[i] = bit;
-        number = quotient;
-    }
-    return bits;
-}
-
-var packUint = R.curry(toBaseArray)(256, 4);
-
-var addLookupTexture = function(name, gl, uniforms, table) {
-    var packed = R.chain(packUint, table);
-    var textures = twgl.createTextures(gl, {
-        table: {
-            mag: gl.NEAREST,
-            min: gl.NEAREST,
-            wrap: gl.CLAMP_TO_EDGE,
-            src: packed,
-            width: 1
-        }
-    });
-    uniforms[name] = textures.table;
-    uniforms[name + '_size'] = table.length;
-}
-
-var nextPowerOfTwo = function(value) {
-    value --;
-    value |= value >> 1;
-    value |= value >> 2;
-    value |= value >> 4;
-    value |= value >> 8;
-    value |= value >> 16;
-    value ++;
-    return value;
-}
-
 var CubeMarch = function(dims, bounds) {
 
-    var cubes = dims[0] * dims[1] * dims[2];
-    var pixels = cubes * 16 * 3
+    this.verts = (dims[0] + 1) * (dims[1] + 1) * (dims[2] + 1);
+    var pixels = this.verts;
     var size = Math.ceil(Math.sqrt(pixels));
     // size = nextPowerOfTwo(size);
     var scene = new Scene(size, size);
@@ -53275,15 +52916,15 @@ var CubeMarch = function(dims, bounds) {
         throw new Error('Context too big');
     }
 
-    var uniforms = {};
-    addLookupTexture('edgeTable', scene.gl, uniforms, edgeTable);
-    addLookupTexture('edgeIndicesTable', scene.gl, uniforms, edgeIndices);
-    addLookupTexture('cubeVertsTable', scene.gl, uniforms, cubeVerts);
-    addLookupTexture('triTable', scene.gl, uniforms, triTable);
+    var uniforms = {
+        boundsA: bounds[0],
+        boundsB: bounds[1],
+        dims: dims
+    };
 
-    this.verticesProg = scene.createProgramInfo(
+    this.potentialsProg = scene.createProgramInfo(
         "#define GLSLIFY 1\nattribute vec3 position;\n\nvoid main() {\n    gl_Position = vec4(position, 1.0);\n}\n",
-        "#define GLSLIFY 1\nprecision mediump float;\n\nfloat map(vec3 p) {\n    return length(p) - .5;\n}\n\nint unpackUint(vec4 values) {\n    float result = 0.;\n    result += values.x * pow(256., 0.);\n    result += values.y * pow(256., 1.);\n    result += values.z * pow(256., 2.);\n    result += values.w * pow(256., 3.);\n    return int(result);\n}\n\nint lookup(sampler2D table, int index, int size) {\n    vec2 uv = vec2(0, float(index) / float(size - 1));\n    vec4 tex = texture2D(table, uv) * 255.;\n    return unpackUint(tex);\n}\n\nvec3 lookupVertexCoord(int i, sampler2D cubeVertsTable, int cubeVertsTable_size) {\n    return vec3(\n        lookup(cubeVertsTable, i * 3, cubeVertsTable_size),\n        lookup(cubeVertsTable, i * 3 + 1, cubeVertsTable_size),\n        lookup(cubeVertsTable, i * 3 + 2, cubeVertsTable_size)\n    );\n}\n\nvec3 vertexPosition(\n    vec3 cube,\n    int vertex,\n    sampler2D cubeVertsTable,\n    int cubeVertsTable_size,\n    vec3 scale,\n    vec3 shift\n) {\n    vec3 v = lookupVertexCoord(vertex, cubeVertsTable, cubeVertsTable_size);\n    return scale * (cube + v) + shift; \n}\n\nfloat potentialAtVertex(\n    vec3 cube,\n    int vertex,\n    sampler2D cubeVertsTable,\n    int cubeVertsTable_size,\n    vec3 scale,\n    vec3 shift\n) {\n    vec3 pos = vertexPosition(cube, vertex, cubeVertsTable, cubeVertsTable_size, scale, shift);\n    return map(pos);\n}\n\nint coordToIndex(vec2 coord, vec2 size) {\n    return int(\n        floor(coord.x) + (floor(coord.y) * size.x)\n    );\n}\n\nvec3 getCube(float index, vec3 dims) {\n    vec3 dims2 = dims - vec3(1);\n    vec3 cube = vec3(0);\n    cube.z = mod(index, dims2.z);\n    cube.y = mod(floor(index / dims2.z), dims2.y);\n    cube.x = mod(floor(index / (dims2.y * dims2.z)), dims2.x);\n    cube.xyz = cube.zyx;\n    return cube;\n}\n\nint getLookupTableIndex(\n    vec3 cube,\n    vec3 scale,\n    vec3 shift\n) {\n    int index = 0;\n\n    if (map(scale * (cube + vec3(0, 0, 0)) + shift) > 0.) {\n        index += 1;\n    }\n    if (map(scale * (cube + vec3(1, 0, 0)) + shift) > 0.) {\n        index += 2;\n    }\n    if (map(scale * (cube + vec3(1, 1, 0)) + shift) > 0.) {\n        index += 4;\n    }\n    if (map(scale * (cube + vec3(0, 1, 0)) + shift) > 0.) {\n        index += 8;\n    }\n    if (map(scale * (cube + vec3(0, 0, 1)) + shift) > 0.) {\n        index += 16;\n    }\n    if (map(scale * (cube + vec3(1, 0, 1)) + shift) > 0.) {\n        index += 32;\n    }\n    if (map(scale * (cube + vec3(1, 1, 1)) + shift) > 0.) {\n        index += 64;\n    }\n    if (map(scale * (cube + vec3(0, 1, 1)) + shift) > 0.) {\n        index += 128;\n    }\n\n    return index;\n}\n\nconst int AND_LENGTH_1117569599 = 15;\n\nint and(int a, int b) {\n    int result = 0;\n    float bitA;\n    float bitB;\n    int bit;\n    for (int i = 0; i < AND_LENGTH_1117569599; i++) {\n        bitA = mod(float(a), 2.);\n        bitB = mod(float(b), 2.);\n        a = a / 2;\n        b = b / 2;\n        bit = int(floor((bitA + bitB) / 2.));\n        result += bit * int(pow(2., float(i)));\n    }\n    return result;\n}\n\nint shiftLeft(int n, int shift) {\n    return n *= int(pow(float(2), float(shift)));\n}\n\n#define FLOAT_MAX  1.70141184e38\n#define FLOAT_MIN  1.17549435e-38\n\nlowp vec4 encode_float_2315452051(highp float v) {\n  highp float av = abs(v);\n\n  //Handle special cases\n  if(av < FLOAT_MIN) {\n    return vec4(0.0, 0.0, 0.0, 0.0);\n  } else if(v > FLOAT_MAX) {\n    return vec4(127.0, 128.0, 0.0, 0.0) / 255.0;\n  } else if(v < -FLOAT_MAX) {\n    return vec4(255.0, 128.0, 0.0, 0.0) / 255.0;\n  }\n\n  highp vec4 c = vec4(0,0,0,0);\n\n  //Compute exponent and mantissa\n  highp float e = floor(log2(av));\n  highp float m = av * pow(2.0, -e) - 1.0;\n  \n  //Unpack mantissa\n  c[1] = floor(128.0 * m);\n  m -= c[1] / 128.0;\n  c[2] = floor(32768.0 * m);\n  m -= c[2] / 32768.0;\n  c[3] = floor(8388608.0 * m);\n  \n  //Unpack exponent\n  highp float ebias = e + 127.0;\n  c[0] = floor(ebias / 2.0);\n  ebias -= c[0] * 2.0;\n  c[1] += floor(ebias) * 128.0; \n\n  //Unpack sign bit\n  c[0] += 128.0 * step(0.0, -v);\n\n  //Scale back to range\n  return c / 255.0;\n}\n\nuniform vec2 resolution;\nuniform sampler2D edgeTable;\nuniform sampler2D edgeIndicesTable;\nuniform sampler2D cubeVertsTable;\nuniform sampler2D triTable;\nuniform int edgeTable_size;\nuniform int edgeIndicesTable_size;\nuniform int cubeVertsTable_size;\nuniform int triTable_size;\n\nuniform vec3 boundsA;\nuniform vec3 boundsB;\nuniform vec3 dims;\n\nconst int EDGE_COUNT = 12;\nconst int TRI_TABLE_ROW_SIZE = 16;\n\nvec3 scale = (boundsB - boundsA) / dims;\nvec3 shift = boundsA;\n\nfloat getComponent(vec3 value) {\n    int xyz = coordToIndex(gl_FragCoord.xy, resolution.xy);\n    xyz = int(mod(float(xyz), 3.));\n    if (xyz == 0) {\n        return value.x;\n    }\n    if (xyz == 1) {\n        return value.y;\n    }\n    if (xyz == 2) {\n        return value.z;\n    }\n}\n\nfloat getCubeIndex() {\n    float index = float(coordToIndex(gl_FragCoord.xy, resolution.xy));\n    index = floor(index / float(TRI_TABLE_ROW_SIZE) / 3.); // repeat for each tritable column, for x, y, and z\n    vec3 dims2 = dims - vec3(1);\n    if (index >= dims2.x * dims2.y * dims2.z) {\n        return -1.;\n    }\n    return index;\n}\n\nvec3 calcVertex(vec3 cube, int edgeIndex) {\n\n    int vertIndexA = lookup(edgeIndicesTable, edgeIndex * 2, edgeIndicesTable_size);\n    int vertIndexB = lookup(edgeIndicesTable, edgeIndex * 2 + 1, edgeIndicesTable_size);\n    vec3 p0 = vec3(\n        lookup(cubeVertsTable, vertIndexA * 3, cubeVertsTable_size),\n        lookup(cubeVertsTable, vertIndexA * 3 + 1, cubeVertsTable_size),\n        lookup(cubeVertsTable, vertIndexA * 3 + 2, cubeVertsTable_size)\n    );\n    vec3 p1 = vec3(\n        lookup(cubeVertsTable, vertIndexB * 3, cubeVertsTable_size),\n        lookup(cubeVertsTable, vertIndexB * 3 + 1, cubeVertsTable_size),\n        lookup(cubeVertsTable, vertIndexB * 3 + 2, cubeVertsTable_size)\n    );\n\n    float a = potentialAtVertex(cube, vertIndexA, cubeVertsTable, cubeVertsTable_size, scale, shift);\n    float b = potentialAtVertex(cube, vertIndexB, cubeVertsTable, cubeVertsTable_size, scale, shift);\n\n    float d = a - b;\n    float t = 0.;\n    if (abs(d) > 1e-6) {\n        t = a / d;\n    }\n\n    vec3 value = scale * ( (cube + p0) + t * (p1 - p0) ) + shift;\n\n    return value;\n}\n\nint getTriEdgeIndex(int lookupIndex) {\n    float iir = float(coordToIndex(gl_FragCoord.xy, resolution.xy));\n    iir = floor(iir / 3.); // do for x, y, and z\n    float indexInRow = mod(iir, float(TRI_TABLE_ROW_SIZE));\n\n    float triTableLookup = float(lookupIndex) * float(TRI_TABLE_ROW_SIZE) + indexInRow;\n    int vertexIndex = lookup(\n        triTable,\n        int(triTableLookup),\n        triTable_size\n    );\n\n    return vertexIndex;\n}\n\nvoid main() {\n\n    float cubeIndex = getCubeIndex();\n\n    if (cubeIndex < 0.) {\n        gl_FragColor = vec4(1);\n        return;\n    }\n\n    vec3 cube = getCube(cubeIndex, dims);\n    int lookupIndex = getLookupTableIndex(cube, scale, shift);\n    int edge_mask = lookup(edgeTable, lookupIndex, edgeTable_size);\n\n    if (edge_mask == 0) {\n        gl_FragColor = vec4(1);\n        return;\n    }\n\n    int edgeIndex = getTriEdgeIndex(lookupIndex);\n\n    if (edgeIndex > EDGE_COUNT - 1) {\n        gl_FragColor = vec4(1);\n        return;\n    }\n\n    vec3 vert = calcVertex(cube, edgeIndex);\n    gl_FragColor = encode_float_2315452051(getComponent(vert));\n}\n"
+        "#define GLSLIFY 1\nprecision mediump float;\n\nint coordToIndex(vec2 coord, vec2 size) {\n    return int(\n        floor(coord.x) + (floor(coord.y) * size.x)\n    );\n}\n\n#define FLOAT_MAX  1.70141184e38\n#define FLOAT_MIN  1.17549435e-38\n\nlowp vec4 encode_float_1117569599(highp float v) {\n  highp float av = abs(v);\n\n  //Handle special cases\n  if(av < FLOAT_MIN) {\n    return vec4(0.0, 0.0, 0.0, 0.0);\n  } else if(v > FLOAT_MAX) {\n    return vec4(127.0, 128.0, 0.0, 0.0) / 255.0;\n  } else if(v < -FLOAT_MAX) {\n    return vec4(255.0, 128.0, 0.0, 0.0) / 255.0;\n  }\n\n  highp vec4 c = vec4(0,0,0,0);\n\n  //Compute exponent and mantissa\n  highp float e = floor(log2(av));\n  highp float m = av * pow(2.0, -e) - 1.0;\n  \n  //Unpack mantissa\n  c[1] = floor(128.0 * m);\n  m -= c[1] / 128.0;\n  c[2] = floor(32768.0 * m);\n  m -= c[2] / 32768.0;\n  c[3] = floor(8388608.0 * m);\n  \n  //Unpack exponent\n  highp float ebias = e + 127.0;\n  c[0] = floor(ebias / 2.0);\n  ebias -= c[0] * 2.0;\n  c[1] += floor(ebias) * 128.0; \n\n  //Unpack sign bit\n  c[0] += 128.0 * step(0.0, -v);\n\n  //Scale back to range\n  return c / 255.0;\n}\n\n#define PHI (sqrt(5.)*0.5 + 0.5)\n#define PI 3.14159265\n\nfloat fOpIntersectionRound(float a, float b, float r) {\n    float m = max(a, b);\n    if ((-a < r) && (-b < r)) {\n        return max(m, -(r - sqrt((r+a)*(r+a) + (r+b)*(r+b))));\n    } else {\n        return m;\n    }\n}\n\n// Cone with correct distances to tip and base circle. Y is up, 0 is in the middle of the base.\nfloat fCone(vec3 p, float radius, float height) {\n    vec2 q = vec2(length(p.xz), p.y);\n    vec2 tip = q - vec2(0, height);\n    vec2 mantleDir = normalize(vec2(height, radius));\n    float mantle = dot(tip, mantleDir);\n    float d = max(mantle, -q.y);\n    float projected = dot(tip, vec2(mantleDir.y, -mantleDir.x));\n    \n    // distance to tip\n    if ((q.y > height) && (projected < 0.)) {\n        d = max(d, length(tip));\n    }\n    \n    // distance to base ring\n    if ((q.x > radius) && (projected > length(vec2(height, radius)))) {\n        d = max(d, length(q - vec2(radius, 0)));\n    }\n    return d;\n}\n\n// Reflect space at a plane\nfloat pReflect(inout vec3 p, vec3 planeNormal, float offset) {\n    float t = dot(p, planeNormal)+offset;\n    if (t < 0.) {\n        p = p - (2.*t)*planeNormal;\n    }\n    return sign(t);\n}\n\n// Rotate around a coordinate axis (i.e. in a plane perpendicular to that axis) by angle <a>.\n// Read like this: R(p.xz, a) rotates \"x towards z\".\n// This is fast if <a> is a compile-time constant and slower (but still practical) if not.\nvoid pR(inout vec2 p, float a) {\n    p = cos(a)*p + sin(a)*vec2(p.y, -p.x);\n}\n\n// The \"Round\" variant uses a quarter-circle to join the two objects smoothly:\nfloat fOpUnionRound(float a, float b, float r) {\n    float m = min(a, b);\n    if ((a < r) && (b < r) ) {\n        return min(m, r - sqrt((r-a)*(r-a) + (r-b)*(r-b)));\n    } else {\n     return m;\n    }\n}\n\n// Repeat around the origin by a fixed angle.\n// For easier use, num of repetitions is use to specify the angle.\nfloat pModPolar(inout vec2 p, float repetitions) {\n    float angle = 2.*PI/repetitions;\n    float a = atan(p.y, p.x) + angle/2.;\n    float r = length(p);\n    float c = floor(a/angle);\n    a = mod(a,angle) - angle/2.;\n    p = vec2(cos(a), sin(a))*r;\n    // For an odd number of repetitions, fix cell index of the cell in -x direction\n    // (cell index would be e.g. -5 and 5 in the two halves of the cell):\n    if (abs(c) >= (repetitions/2.)) c = abs(c);\n    return c;\n}\n\nvec3 pModDodecahedron(inout vec3 p) {\n    vec3 v1 = normalize(vec3(0., PHI, 1.));\n    vec3 v2 = normalize(vec3(PHI, 1., 0.));\n\n    float sides = 5.;\n    float dihedral = acos(dot(v1, v2));\n    float halfDdihedral = dihedral / 2.;\n    float faceAngle = 2. * PI / sides;\n    \n    p.z = abs(p.z);\n    \n    pR(p.xz, -halfDdihedral);\n    pR(p.xy, faceAngle / 4.);\n    \n    p.x = -abs(p.x);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    p.z = -p.z;\n    pModPolar(p.yx, sides);\n    pReflect(p, vec3(-1, 0, 0), 0.);\n    \n    return p;\n}\n\nvec3 pModIcosahedron(inout vec3 p) {\n\n    vec3 v1 = normalize(vec3(1, 1, 1 ));\n    vec3 v2 = normalize(vec3(0, 1, PHI+1.));\n\n    float sides = 3.;\n    float dihedral = acos(dot(v1, v2));\n    float halfDdihedral = dihedral / 2.;\n    float faceAngle = 2. * PI / sides;\n    \n\n    p.z = abs(p.z);    \n    pR(p.yz, halfDdihedral);\n    \n    p.x = -abs(p.x);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n     \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n  \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    p.z = -p.z;\n    pModPolar(p.yx, sides);\n    pReflect(p, vec3(-1, 0, 0), 0.);\n\n    return p;\n}\n\nfloat spikeModel(vec3 p) {\n    pR(p.zy, PI/2.);\n    return fCone(p, 0.25, 3.);\n}\n\nfloat spikesModel(vec3 p) {\n    float smooth = 0.6;\n    \n    pModDodecahedron(p);\n    \n    vec3 v1 = normalize(vec3(0., PHI, 1.));\n    vec3 v2 = normalize(vec3(PHI, 1., 0.));\n\n    float sides = 5.;\n    float dihedral = acos(dot(v1, v2));\n    float halfDdihedral = dihedral / 2.;\n    float faceAngle = 2. * PI / sides;\n    \n    float spikeA = spikeModel(p);\n    \n    pR(p.zy, -dihedral);\n\n    float spikeB = spikeModel(p);\n\n    pR(p.xy, -faceAngle);\n    pR(p.zy, dihedral);\n    \n    float spikeC = spikeModel(p);\n    \n    return fOpUnionRound(\n        spikeC,\n        fOpUnionRound(\n            spikeA,\n            spikeB,\n            smooth\n        ),\n        smooth\n    );\n}\n\nfloat coreModel(vec3 p) {\n    float outer = length(p) - .9;\n    float spikes = spikesModel(p);\n    outer = fOpUnionRound(outer, spikes, 0.4);\n    return outer;\n}\n\nfloat exoSpikeModel(vec3 p) {\n    pR(p.zy, PI/2.);\n    p.y -= 1.;\n    return fCone(p, 0.5, 1.);\n}\n\nfloat exoSpikesModel(vec3 p) {\n    pModIcosahedron(p);\n\n    vec3 v1 = normalize(vec3(1, 1, 1 ));\n    vec3 v2 = normalize(vec3(0, 1, PHI+1.));\n\n    float dihedral = acos(dot(v1, v2));\n\n    float spikeA = exoSpikeModel(p);\n    \n    pR(p.zy, -dihedral);\n\n    float spikeB = exoSpikeModel(p);\n\n    return fOpUnionRound(spikeA, spikeB, 0.5);\n}\n\nfloat exoHolesModel(vec3 p) {\n    float len = 3.;\n    pModDodecahedron(p);\n    p.z += 1.5;\n    return length(p) - .65;\n}\n\nfloat exoModel(vec3 p) {    \n    float thickness = 0.18;\n    float outer = length(p) - 1.5;\n    float inner = outer + thickness;\n\n    float spikes = exoSpikesModel(p);\n    outer = fOpUnionRound(outer, spikes, 0.3);\n    \n    float shell = max(-inner, outer);\n\n    float holes = exoHolesModel(p);\n    shell = fOpIntersectionRound(-holes, shell, thickness/2.);\n    \n    return shell;\n}\n\nfloat doExo(vec3 p) {\n    //return length(p + vec3(0,0,-2)) - 3.;\n    //float disp = (sin(length(p) * 5. - t * 8.)) * 0.03;\n    return exoModel(p);\n}\n\nfloat doCore(vec3 p) {\n    //return length(p + vec3(0,0,2)) - 3.;\n    return coreModel(p);\n}\n\n// checks to see which intersection is closer\n// and makes the y of the vec2 be the proper id\nvec2 opU( vec2 d1, vec2 d2 ){\n    \n    return (d1.x<d2.x) ? d1 : d2;\n    \n}\n\n//--------------------------------\n// Modelling \n//--------------------------------\nfloat map( vec3 p ){  \n    p *= 3.;\n    vec2 res = vec2(doExo(p) ,1.); \n    res = opU(res, vec2(doCore(p) ,2.));\n    \n    return res.x;\n}\n\nuniform vec2 resolution;\n\nuniform vec3 boundsA;\nuniform vec3 boundsB;\nuniform vec3 dims;\nuniform float time;\n\nvec3 vertDims = dims + vec3(1);\nvec3 scale = (boundsB - boundsA) / dims;\nvec3 shift = boundsA;\n\n// float map(vec3 p) {\n//     return length(p) - .5 + sin(time / 1000.) * .2;\n// }\n\nvec3 vertFromIndex(float index) {\n    vec3 vert = vec3(0);\n    vert.x = mod(index, vertDims.x);\n    vert.y = mod(floor(index / vertDims.x), vertDims.y);\n    vert.z = mod(floor(index / (vertDims.y * vertDims.x)), vertDims.z);\n    return scale * vert + shift; \n}\n\nvoid main() {\n\n    float vertIndex = float(coordToIndex(gl_FragCoord.xy, resolution.xy));\n\n    if (vertIndex >= vertDims.x * vertDims.y * vertDims.z) {\n        gl_FragColor = vec4(1);\n        return;\n    }\n\n    vec3 vert = vertFromIndex(vertIndex);\n    float potential = map(vert);\n    gl_FragColor = encode_float_1117569599(potential);\n}\n"
     );
 
     this.scene = scene;
@@ -53291,43 +52932,35 @@ var CubeMarch = function(dims, bounds) {
     this.uniforms = uniforms;
     this.dims = dims;
     this.bounds = bounds;
+    this.startTime = new Date().getTime();
 };
 
-CubeMarch.prototype.march = function(debug) {
+CubeMarch.prototype.march = function(updateGeometry, debug) {
+
+    var time = function(name) { ! debug && console.time(name); };
+    var timeEnd = function(name) { ! debug && console.timeEnd(name); };
 
     var scene = this.scene;
     var gl = this.gl;
-    var uniforms = this.uniforms;
     var dims = this.dims;
     var bounds = this.bounds;
 
-    uniforms.boundsA = bounds[0];
-    uniforms.boundsB = bounds[1];
-    uniforms.dims = dims;
+    this.uniforms.time = new Date().getTime() - this.startTime;
 
-    scene.draw({
-        program: this.verticesProg,
-        uniforms: uniforms
+    this.scene.draw({
+        program: this.potentialsProg,
+        uniforms: this.uniforms
     });
 
-    if (debug) {
-        return;
-    }
-
-    var pixels = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
-    console.time("readPixels");
+    var pixelCount = gl.drawingBufferWidth * gl.drawingBufferHeight;
+    var pixels = new Uint8Array(pixelCount * 4);
+    time("readPixels");
     gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-    console.timeEnd("readPixels");
-
-    console.time("read_triangles");
-    var indexCount = uniforms.dims[0] * uniforms.dims[1] * uniforms.dims[2] * 16 * 3;
+    timeEnd("readPixels");
+    var potentials = [];
     var r, g, b, a;
-    var vertices = [[]];
-    var triangles = [[]];
-    var vertexIndex;
-    var triangleIndex;
-
-    for (var i = 0; i < indexCount; i++) {
+    time("parsePixels");
+    for (var i = 0; i < pixelCount; i++) {
         r = pixels[i * 4 + 0];
         g = pixels[i * 4 + 1];
         b = pixels[i * 4 + 2];
@@ -53335,31 +52968,39 @@ CubeMarch.prototype.march = function(debug) {
         if (r + a + b + g + a === 255 * 5) {
             continue;
         }
+        potentials.push(unpackFloat(r, g, b, a));
+    }
+    timeEnd("parsePixels");
 
-        vertexIndex = vertices.length - 1;
-        vertices[vertexIndex].push(unpackFloat(r, g, b, a));
+    if (debug) {
+        return;
+    }
 
-        if (vertices[vertexIndex].length == 3) {
-            triangleIndex = triangles.length - 1;
-            triangles[triangleIndex].push(vertexIndex);
-
-            if (triangles[triangleIndex].length == 3) {
-                triangles.push([]);
+    var cubes = [];
+    for (var z = 0; z < dims[2]; z++) {
+        for (var y = 0; y < dims[1]; y++) {
+            for (var x = 0; x < dims[0]; x++) {
+                cubes.push([x, y, z]);
             }
-
-            vertices.push([]);
         }
     }
-    vertices = vertices.slice(0, -1);
-    triangles = triangles.slice(0, -1);
-    console.timeEnd("read_triangles");
 
-    return { positions: vertices, cells: triangles };
+    var configs = cubes.map(function(cube) {
+        return {
+            cube: cube,
+            dims: dims,
+            bounds: bounds,
+            potentials: potentials
+        };
+    });
+
+    var workerPool = new WorkerPool('build/workers/march.js', 4);
+    workerPool.each(configs, updateGeometry);
 };
 
 module.exports = CubeMarch;
 
-},{"./scene":16,"glsl-read-float":1,"ramda":7,"twgl.js":11}],15:[function(require,module,exports){
+},{"./scene":16,"./worker-pool":17,"glsl-read-float":3,"ramda":9,"twgl.js":13}],15:[function(require,module,exports){
 "use strict";
 
 var CubeMarch = require("./cubemarch");
@@ -53369,8 +53010,7 @@ var CubeMarch = require("./cubemarch");
 var debugMode = false;
 
 
-
-var dd = 4;
+var dd = 10;
 var dims = [dd, dd, dd];
 var s = 1;
 var bounds = [
@@ -53397,10 +53037,6 @@ if (debugMode) {
     }).start();
 
 } else {
-
-    console.time("march");
-    var result = cubeMarch.march();
-    console.timeEnd("march");
 
     var THREE = require('three');
     THREE.TrackballControls = require('three.trackball');
@@ -53446,27 +53082,48 @@ if (debugMode) {
     var axisHelper = new THREE.AxisHelper( 1 );
     scene.add( axisHelper );
 
-    console.time("geometry");
     var geometry = new THREE.Geometry();
-    var v, f;
-
-    for (var i = 0; i < result.positions.length; ++i) {
-        v = result.positions[i];
-        geometry.vertices.push(new THREE.Vector3().fromArray(v));
-    }
-
-    for (var i = 0; i < result.cells.length; ++i) {
-        f = result.cells[i];
-        geometry.faces.push(new THREE.Face3(f[0], f[1], f[2]));
-    }
-
-    // geometry.mergeVertices();
-    console.timeEnd("geometry");
-
     var obj = new THREE.Mesh(geometry, material);
     var wireframe = new THREE.WireframeHelper( obj, '#fff' );
-    scene.add(obj);
+    // scene.add(obj);
     scene.add(wireframe);
+
+
+    var updateGeometry = function(data) {
+        if ( ! data) {
+            return;
+        }
+
+        var v, f;
+        var len = geometry.vertices.length;
+
+        for (var i = 0; i < data.vertices.length; ++i) {
+            v = data.vertices[i];
+            geometry.vertices.push(new THREE.Vector3().fromArray(v));
+        }
+
+        for (var i = 0; i < data.faces.length; ++i) {
+            f = data.faces[i];
+            geometry.faces.push(
+                new THREE.Face3(
+                    f[0] + len,
+                    f[1] + len,
+                    f[2] + len
+                )
+            );
+        }
+
+        geometry.verticesNeedUpdate = true;
+        geometry.elementsNeedUpdate = true;
+
+        scene.remove(wireframe);
+        wireframe = new THREE.WireframeHelper( obj, '#fff' );
+        scene.add(wireframe);
+
+    };
+
+    cubeMarch.march(updateGeometry);
+
 
 
     function render() {
@@ -53521,7 +53178,7 @@ if (debugMode) {
     animate();
 };
 
-},{"./cubemarch":14,"raf-loop":2,"stats.js":8,"three":10,"three.trackball":9}],16:[function(require,module,exports){
+},{"./cubemarch":14,"raf-loop":4,"stats.js":10,"three":12,"three.trackball":11}],16:[function(require,module,exports){
 "use strict";
 
 var twgl = require("twgl.js");
@@ -53620,4 +53277,41 @@ Scene.prototype.draw = function(spec) {
 
 module.exports = Scene;
 
-},{"twgl.js":11}]},{},[15]);
+},{"twgl.js":13}],17:[function(require,module,exports){
+
+var WorkerPool = function(filename, n) {
+    this.workers = [];
+    this.queue = [];
+    var worker;
+    while (n--) {
+        worker = new Worker(filename)
+        worker.onmessage = this.finished.bind(this, worker);
+        this.workers.push(worker);
+    }
+};
+
+WorkerPool.prototype.each = function(configs, update) {
+    var len = configs.length;
+    this.update = update;
+    var worker;
+    configs.forEach(function(config, i) {
+        worker = this.workers[i];
+        if (worker) {
+            worker.postMessage(config);
+        } else {
+            this.queue.push(config);
+        }
+    }, this);
+};
+
+WorkerPool.prototype.finished = function(worker, evt) {
+    this.update(evt.data);
+    var config = this.queue.pop();
+    if (config) {
+        worker.postMessage(config);
+    }
+};
+
+module.exports = WorkerPool;
+
+},{}]},{},[15]);
