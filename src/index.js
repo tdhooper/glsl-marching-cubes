@@ -7,7 +7,7 @@ var CubeMarch = require("./cubemarch");
 var debugMode = false;
 
 
-var dd = 10;
+var dd = 200;
 var dims = [dd, dd, dd];
 var s = 1;
 var bounds = [
@@ -119,7 +119,12 @@ if (debugMode) {
 
     };
 
-    cubeMarch.march(updateGeometry);
+    var done = function() {
+        console.timeEnd('march');
+    };
+
+    console.time('march');
+    cubeMarch.march(updateGeometry, done);
 
 
 

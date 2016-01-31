@@ -10,14 +10,18 @@ var WorkerPool = function(filename, n) {
     }
 };
 
-WorkerPool.prototype.each = function(configs, update) {
-    var len = configs.length;
+WorkerPool.prototype.each = function(configs, update, done) {
     this.update = update;
+    this.done = done;
+    this.doneCount = configs.length;
+
     var worker;
     configs.forEach(function(config, i) {
         worker = this.workers[i];
         if (worker) {
-            worker.postMessage(config);
+            console.time("postMessage");
+            this.post(worker, config);
+            console.timeEnd("postMessage");
         } else {
             this.queue.push(config);
         }
@@ -26,10 +30,23 @@ WorkerPool.prototype.each = function(configs, update) {
 
 WorkerPool.prototype.finished = function(worker, evt) {
     this.update(evt.data);
+    this.doneCount -= 1;
+    if (this.doneCount == 0) {
+        this.done();
+    }
     var config = this.queue.pop();
     if (config) {
-        worker.postMessage(config);
+        this.post(worker, config);
     }
 };
+
+WorkerPool.prototype.post = function(worker, config) {
+    if (config.hasOwnProperty('json')) {
+        worker.postMessage(config.json);
+    }
+    if (config.hasOwnProperty('transferable')) {
+        worker.postMessage(config.transferable, [config.transferable]);
+    }
+}
 
 module.exports = WorkerPool;
