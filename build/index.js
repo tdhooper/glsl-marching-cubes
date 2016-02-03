@@ -53042,7 +53042,7 @@ var CubeMarch = require("./cubemarch");
 var debugMode = false;
 
 
-var dd = 100;
+var dd = 150;
 var dims = [dd, dd, dd];
 var s = 1;
 var bounds = [
