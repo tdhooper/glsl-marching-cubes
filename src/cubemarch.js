@@ -48,7 +48,7 @@ CubeMarch.prototype.march = function(updateGeometry, done, debug) {
     var bounds = this.bounds;
 
     var workers = 4;
-    var blocks = 8;
+    var blocks = 256;
 
     this.uniforms.time = new Date().getTime() - this.startTime;
 

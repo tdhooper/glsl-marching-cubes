@@ -7,7 +7,7 @@ var CubeMarch = require("./cubemarch");
 var debugMode = false;
 
 
-var dd = 4;
+var dd = 100;
 var dims = [dd, dd, dd];
 var s = 1;
 var bounds = [
@@ -67,7 +67,6 @@ if (debugMode) {
 
     var material = new THREE.MeshBasicMaterial({
         side: THREE.DoubleSide
-        ,wireframe: true
     });
 
     var wireframeMaterial = new THREE.MeshBasicMaterial({
@@ -79,23 +78,14 @@ if (debugMode) {
     var axisHelper = new THREE.AxisHelper( 1 );
     scene.add( axisHelper );
 
-
-    var triangles = dims[0] * dims[1] * dims[2] * 5;
-    var geometry = new THREE.BufferGeometry();
-    var positions = new Float32Array( triangles * 3 * 3 );
-    var positionBuffer = new THREE.BufferAttribute( positions, 3 );
-    geometry.addAttribute( 'position', positionBuffer );
-
-    var obj = new THREE.Mesh(geometry, material);
-    scene.add(obj);
-
-    var numFaces = 0;
-
     var updateGeometry = function(data) {
 
         if ( ! data) {
             return;
         }
+
+        var geometry = new THREE.BufferGeometry();
+        var positions = new Float32Array( data.faces.length * 3 * 3 );
 
         var f, v1, v2, v3, offset;
         for (var i = 0; i < data.faces.length; ++i) {
@@ -103,23 +93,21 @@ if (debugMode) {
             v1 = data.vertices[ f[0] ];
             v2 = data.vertices[ f[1] ];
             v3 = data.vertices[ f[2] ];
-            offset = (i + numFaces) * 3;
-
-            positionBuffer.setX(offset + 0, v1[0]);
-            positionBuffer.setY(offset + 0, v1[1]);
-            positionBuffer.setZ(offset + 0, v1[2]);
-
-            positionBuffer.setX(offset + 1, v2[0]);
-            positionBuffer.setY(offset + 1, v2[1]);
-            positionBuffer.setZ(offset + 1, v2[2]);
-
-            positionBuffer.setX(offset + 2, v3[0]);
-            positionBuffer.setY(offset + 2, v3[1]);
-            positionBuffer.setZ(offset + 2, v3[2]);
+            positions[ (i * 9) + 0 ] = v1[0];
+            positions[ (i * 9) + 1 ] = v1[1];
+            positions[ (i * 9) + 2 ] = v1[2];
+            positions[ (i * 9) + 3 ] = v2[0];
+            positions[ (i * 9) + 4 ] = v2[1];
+            positions[ (i * 9) + 5 ] = v2[2];
+            positions[ (i * 9) + 6 ] = v3[0];
+            positions[ (i * 9) + 7 ] = v3[1];
+            positions[ (i * 9) + 8 ] = v3[2];
         }
 
-        positionBuffer.needsUpdate = true;
-        numFaces += data.faces.length;
+        var positionBuffer = new THREE.BufferAttribute( positions, 3 );
+        geometry.addAttribute( 'position', positionBuffer );
+        var obj = new THREE.Mesh(geometry, wireframeMaterial);
+        scene.add(obj);
     };
 
     var done = function() {
