@@ -7,7 +7,7 @@ var CubeMarch = require("./cubemarch");
 var debugMode = false;
 
 
-var dd = 200;
+var dd = 4;
 var dims = [dd, dd, dd];
 var s = 1;
 var bounds = [
@@ -65,9 +65,9 @@ if (debugMode) {
     var light = new THREE.AmbientLight( 0x404040 ); // soft white light
     scene.add( light );
 
-    var material = new THREE.MeshNormalMaterial({
+    var material = new THREE.MeshBasicMaterial({
         side: THREE.DoubleSide
-        // ,wireframe: true
+        ,wireframe: true
     });
 
     var wireframeMaterial = new THREE.MeshBasicMaterial({
@@ -79,44 +79,47 @@ if (debugMode) {
     var axisHelper = new THREE.AxisHelper( 1 );
     scene.add( axisHelper );
 
-    var geometry = new THREE.Geometry();
-    var obj = new THREE.Mesh(geometry, material);
-    var wireframe = new THREE.WireframeHelper( obj, '#fff' );
-    // scene.add(obj);
-    scene.add(wireframe);
 
+    var triangles = dims[0] * dims[1] * dims[2] * 5;
+    var geometry = new THREE.BufferGeometry();
+    var positions = new Float32Array( triangles * 3 * 3 );
+    var positionBuffer = new THREE.BufferAttribute( positions, 3 );
+    geometry.addAttribute( 'position', positionBuffer );
+
+    var obj = new THREE.Mesh(geometry, material);
+    scene.add(obj);
+
+    var numFaces = 0;
 
     var updateGeometry = function(data) {
+
         if ( ! data) {
             return;
         }
 
-        var v, f;
-        var len = geometry.vertices.length;
-
-        for (var i = 0; i < data.vertices.length; ++i) {
-            v = data.vertices[i];
-            geometry.vertices.push(new THREE.Vector3().fromArray(v));
-        }
-
+        var f, v1, v2, v3, offset;
         for (var i = 0; i < data.faces.length; ++i) {
             f = data.faces[i];
-            geometry.faces.push(
-                new THREE.Face3(
-                    f[0] + len,
-                    f[1] + len,
-                    f[2] + len
-                )
-            );
+            v1 = data.vertices[ f[0] ];
+            v2 = data.vertices[ f[1] ];
+            v3 = data.vertices[ f[2] ];
+            offset = (i + numFaces) * 3;
+
+            positionBuffer.setX(offset + 0, v1[0]);
+            positionBuffer.setY(offset + 0, v1[1]);
+            positionBuffer.setZ(offset + 0, v1[2]);
+
+            positionBuffer.setX(offset + 1, v2[0]);
+            positionBuffer.setY(offset + 1, v2[1]);
+            positionBuffer.setZ(offset + 1, v2[2]);
+
+            positionBuffer.setX(offset + 2, v3[0]);
+            positionBuffer.setY(offset + 2, v3[1]);
+            positionBuffer.setZ(offset + 2, v3[2]);
         }
 
-        geometry.verticesNeedUpdate = true;
-        geometry.elementsNeedUpdate = true;
-
-        scene.remove(wireframe);
-        wireframe = new THREE.WireframeHelper( obj, '#fff' );
-        scene.add(wireframe);
-
+        positionBuffer.needsUpdate = true;
+        numFaces += data.faces.length;
     };
 
     var done = function() {
