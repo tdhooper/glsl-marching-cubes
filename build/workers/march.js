@@ -334,12 +334,11 @@ var vertIndexFromCubeVert = function(cube, vert, dims) {
 
 var potential = function(cube, vert, dims, potentials) {
     var index = vertIndexFromCubeVert(cube, vert, dims);
-    return potentials[index];
+    var p = potentials[index];
+    return p;
 };
 
-var marchCube = function(cube, dims, bounds, potentials) {
-
-    var x = cube;
+var marchCubes = function(start, end, dims, bounds, potentials) {
 
     var scale     = [0,0,0];
     var shift     = [0,0,0];
@@ -348,67 +347,82 @@ var marchCube = function(cube, dims, bounds, potentials) {
         shift[i] = bounds[0][i];
     }
 
+    var x = [];
     var vertices = []
         , faces = []
         , grid = new Array(8)
         , edges = new Array(12);
 
-   //For each cell, compute cube mask
-    var cube_index = 0;
-    for(var i=0; i<8; ++i) {
-        var s = potential(x, i, dims, potentials);
-        grid[i] = s;
-        cube_index |= (s > 0) ? 1 << i : 0;
-    }
+    for (var index = start; index < end; index++) {
+      
+      x[0] = index % dims[0];
+      x[1] = Math.floor(index / dims[0]) % dims[1];
+      x[2] = Math.floor(index / (dims[1] * dims[0])) % dims[2];
 
-    //Compute vertices
-    var edge_mask = edgeTable[cube_index];
+     //For each cell, compute cube mask
+      var cube_index = 0;
+      for(var i=0; i<8; ++i) {
+          var s = potential(x, i, dims, potentials);
+          grid[i] = s;
+          cube_index |= (s > 0) ? 1 << i : 0;
+      }
 
-    if(edge_mask === 0) {
-        return;
-    }
+      //Compute vertices
+      var edge_mask = edgeTable[cube_index];
 
-    for(var i=0; i<12; ++i) {
-        if((edge_mask & (1<<i)) === 0) {
-            continue;
-        }
-        edges[i] = vertices.length;
-        var nv = [0,0,0];
-        var e = edgeIndex[i];
-        var p0 = cubeVerts[e[0]];
-        var p1 = cubeVerts[e[1]];
-        var a = grid[e[0]];
-        var b = grid[e[1]];
-        var d = a - b;
-        var t = 0;
+      if(edge_mask === 0) {
+          continue;
+      }
 
-        if(Math.abs(d) > 1e-6) {
-            t = a / d;
-        }
-        for(var j=0; j<3; ++j) {
-            nv[j] = scale[j] * ((x[j] + p0[j]) + t * (p1[j] - p0[j])) + shift[j];
-        }
-        vertices.push(nv);
-    }
-    //Add faces
-    var f = triTable[cube_index];
-    for(var i=0; i<f.length; i += 3) {
-        faces.push([edges[f[i]], edges[f[i+1]], edges[f[i+2]]]);
+      for(var i=0; i<12; ++i) {
+          if((edge_mask & (1<<i)) === 0) {
+              continue;
+          }
+          edges[i] = vertices.length;
+          var nv = [0,0,0];
+          var e = edgeIndex[i];
+          var p0 = cubeVerts[e[0]];
+          var p1 = cubeVerts[e[1]];
+          var a = grid[e[0]];
+          var b = grid[e[1]];
+          var d = a - b;
+          var t = 0;
+
+          if(Math.abs(d) > 1e-6) {
+              t = a / d;
+          }
+          for(var j=0; j<3; ++j) {
+              nv[j] = scale[j] * ((x[j] + p0[j]) + t * (p1[j] - p0[j])) + shift[j];
+          }
+          vertices.push(nv);
+      }
+      //Add faces
+      var f = triTable[cube_index];
+      for(var i=0; i<f.length; i += 3) {
+          faces.push([edges[f[i]], edges[f[i+1]], edges[f[i+2]]]);
+      }
     }
 
     return { vertices: vertices, faces: faces };
 }
 
+var potentials;
+
 onmessage = function(e) {
     var data = e.data;
 
-    var cube = data.cube;
+    if ( ! data.hasOwnProperty('start')) {
+        potentials = new Float32Array(data);
+        return;
+    }
+
+    var start = data.start;
+    var end = data.end;
     var dims = data.dims;
     var bounds = data.bounds;
-    var potentials = data.potentials;
 
-    postMessage(
-        marchCube(cube, dims, bounds, potentials)
-    );
+    var result = marchCubes(start, end, dims, bounds, potentials);
+    postMessage(result);
 };
+
 },{}]},{},[1]);

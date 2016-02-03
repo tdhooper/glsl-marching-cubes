@@ -52935,7 +52935,7 @@ var CubeMarch = function(dims, bounds) {
     this.startTime = new Date().getTime();
 };
 
-CubeMarch.prototype.march = function(updateGeometry, debug) {
+CubeMarch.prototype.march = function(updateGeometry, done, debug) {
 
     var time = function(name) { ! debug && console.time(name); };
     var timeEnd = function(name) { ! debug && console.timeEnd(name); };
@@ -52944,6 +52944,9 @@ CubeMarch.prototype.march = function(updateGeometry, debug) {
     var gl = this.gl;
     var dims = this.dims;
     var bounds = this.bounds;
+
+    var workers = 4;
+    var blocks = 256;
 
     this.uniforms.time = new Date().getTime() - this.startTime;
 
@@ -52957,18 +52960,29 @@ CubeMarch.prototype.march = function(updateGeometry, debug) {
     time("readPixels");
     gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
     timeEnd("readPixels");
-    var potentials = [];
+    var potentialsBuffer;
+    var potentials;
+    var blockPotentialBuffers = [];
+    var blockPotentials = [];
+    for (var i = 0; i < workers; i++) {
+        potentialsBuffer = new ArrayBuffer(this.verts * 4);
+        potentials = new Float32Array(potentialsBuffer);
+        blockPotentialBuffers.push(potentialsBuffer);
+        blockPotentials.push(potentials);
+    }
     var r, g, b, a;
+    var value;
+    var bl;
     time("parsePixels");
-    for (var i = 0; i < pixelCount; i++) {
+    for (var i = 0; i < this.verts; i++) {
         r = pixels[i * 4 + 0];
         g = pixels[i * 4 + 1];
         b = pixels[i * 4 + 2];
         a = pixels[i * 4 + 3];
-        if (r + a + b + g + a === 255 * 5) {
-            continue;
+        value = unpackFloat(r, g, b, a);
+        for (bl = 0; bl < workers; bl++) {
+            blockPotentials[bl][i] = value;
         }
-        potentials.push(unpackFloat(r, g, b, a));
     }
     timeEnd("parsePixels");
 
@@ -52976,26 +52990,44 @@ CubeMarch.prototype.march = function(updateGeometry, debug) {
         return;
     }
 
-    var cubes = [];
-    for (var z = 0; z < dims[2]; z++) {
-        for (var y = 0; y < dims[1]; y++) {
-            for (var x = 0; x < dims[0]; x++) {
-                cubes.push([x, y, z]);
-            }
-        }
+    time("startJobs");
+
+    var initialSpecs = [];
+    var marchSpecs = [];
+
+    for (var i = 0; i < workers; i++) {
+        initialSpecs.push({
+            transferable: blockPotentialBuffers[i]
+        });
     }
 
-    var configs = cubes.map(function(cube) {
-        return {
-            cube: cube,
-            dims: dims,
-            bounds: bounds,
-            potentials: potentials
-        };
-    });
+    var start;
+    var end = 0;
+    var cubes = dims[0] * dims[1] * dims[2];
+    var verts = (dims[0] + 1) * (dims[1] + 1) * (dims[2] + 1);
+    var overlap = Math.cbrt(verts) * Math.cbrt(verts);
+    while (blocks--) {
+        start = end;
+        end = start + Math.floor((cubes - start) / (blocks + 1));
+        marchSpecs.push({
+            json: {
+                start: start,
+                end: end,
+                pStart: 0,
+                dims: dims,
+                bounds: bounds
+            }
+        });
+    }
 
-    var workerPool = new WorkerPool('build/workers/march.js', 4);
-    workerPool.each(configs, updateGeometry);
+    time("workerInit");  
+    var workerPool = new WorkerPool('build/workers/march.js', workers);
+    timeEnd("workerInit");  
+    time("workerEach");  
+    workerPool.each(initialSpecs);
+    workerPool.each(marchSpecs, updateGeometry, done);
+    timeEnd("workerEach");  
+    timeEnd("startJobs");
 };
 
 module.exports = CubeMarch;
@@ -53010,7 +53042,7 @@ var CubeMarch = require("./cubemarch");
 var debugMode = false;
 
 
-var dd = 10;
+var dd = 100;
 var dims = [dd, dd, dd];
 var s = 1;
 var bounds = [
@@ -53068,9 +53100,8 @@ if (debugMode) {
     var light = new THREE.AmbientLight( 0x404040 ); // soft white light
     scene.add( light );
 
-    var material = new THREE.MeshNormalMaterial({
+    var material = new THREE.MeshBasicMaterial({
         side: THREE.DoubleSide
-        // ,wireframe: true
     });
 
     var wireframeMaterial = new THREE.MeshBasicMaterial({
@@ -53082,47 +53113,44 @@ if (debugMode) {
     var axisHelper = new THREE.AxisHelper( 1 );
     scene.add( axisHelper );
 
-    var geometry = new THREE.Geometry();
-    var obj = new THREE.Mesh(geometry, material);
-    var wireframe = new THREE.WireframeHelper( obj, '#fff' );
-    // scene.add(obj);
-    scene.add(wireframe);
-
-
     var updateGeometry = function(data) {
+
         if ( ! data) {
             return;
         }
 
-        var v, f;
-        var len = geometry.vertices.length;
+        var geometry = new THREE.BufferGeometry();
+        var positions = new Float32Array( data.faces.length * 3 * 3 );
 
-        for (var i = 0; i < data.vertices.length; ++i) {
-            v = data.vertices[i];
-            geometry.vertices.push(new THREE.Vector3().fromArray(v));
-        }
-
+        var f, v1, v2, v3, offset;
         for (var i = 0; i < data.faces.length; ++i) {
             f = data.faces[i];
-            geometry.faces.push(
-                new THREE.Face3(
-                    f[0] + len,
-                    f[1] + len,
-                    f[2] + len
-                )
-            );
+            v1 = data.vertices[ f[0] ];
+            v2 = data.vertices[ f[1] ];
+            v3 = data.vertices[ f[2] ];
+            positions[ (i * 9) + 0 ] = v1[0];
+            positions[ (i * 9) + 1 ] = v1[1];
+            positions[ (i * 9) + 2 ] = v1[2];
+            positions[ (i * 9) + 3 ] = v2[0];
+            positions[ (i * 9) + 4 ] = v2[1];
+            positions[ (i * 9) + 5 ] = v2[2];
+            positions[ (i * 9) + 6 ] = v3[0];
+            positions[ (i * 9) + 7 ] = v3[1];
+            positions[ (i * 9) + 8 ] = v3[2];
         }
 
-        geometry.verticesNeedUpdate = true;
-        geometry.elementsNeedUpdate = true;
-
-        scene.remove(wireframe);
-        wireframe = new THREE.WireframeHelper( obj, '#fff' );
-        scene.add(wireframe);
-
+        var positionBuffer = new THREE.BufferAttribute( positions, 3 );
+        geometry.addAttribute( 'position', positionBuffer );
+        var obj = new THREE.Mesh(geometry, wireframeMaterial);
+        scene.add(obj);
     };
 
-    cubeMarch.march(updateGeometry);
+    var done = function() {
+        console.timeEnd('march');
+    };
+
+    console.time('march');
+    cubeMarch.march(updateGeometry, done);
 
 
 
@@ -53290,14 +53318,18 @@ var WorkerPool = function(filename, n) {
     }
 };
 
-WorkerPool.prototype.each = function(configs, update) {
-    var len = configs.length;
+WorkerPool.prototype.each = function(configs, update, done) {
     this.update = update;
+    this.done = done;
+    this.doneCount = configs.length;
+
     var worker;
     configs.forEach(function(config, i) {
         worker = this.workers[i];
         if (worker) {
-            worker.postMessage(config);
+            console.time("postMessage");
+            this.post(worker, config);
+            console.timeEnd("postMessage");
         } else {
             this.queue.push(config);
         }
@@ -53306,11 +53338,24 @@ WorkerPool.prototype.each = function(configs, update) {
 
 WorkerPool.prototype.finished = function(worker, evt) {
     this.update(evt.data);
+    this.doneCount -= 1;
+    if (this.doneCount == 0) {
+        this.done();
+    }
     var config = this.queue.pop();
     if (config) {
-        worker.postMessage(config);
+        this.post(worker, config);
     }
 };
+
+WorkerPool.prototype.post = function(worker, config) {
+    if (config.hasOwnProperty('json')) {
+        worker.postMessage(config.json);
+    }
+    if (config.hasOwnProperty('transferable')) {
+        worker.postMessage(config.transferable, [config.transferable]);
+    }
+}
 
 module.exports = WorkerPool;
 
