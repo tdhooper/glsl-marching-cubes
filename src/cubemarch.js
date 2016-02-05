@@ -6,23 +6,23 @@ var Scene = require('./scene');
 var WorkerPool = require('./worker-pool');
 var R = require('ramda');
 var unpackFloat = require("glsl-read-float");
+var splitVolume = require("./split-volume");
 
 var CubeMarch = function(dims, bounds) {
 
-    this.verts = (dims[0] + 1) * (dims[1] + 1) * (dims[2] + 1);
-    var pixels = this.verts;
-    var size = Math.ceil(Math.sqrt(pixels));
-    // size = nextPowerOfTwo(size);
+    var vertexCount = (dims[0] + 1) * (dims[1] + 1) * (dims[2] + 1);
+    var size = Math.ceil(Math.sqrt(vertexCount));
     var scene = new Scene(size, size);
-    if (size > scene.gl.drawingBufferWidth) {
-        throw new Error('Context too big');
-    }
+    var maxSize = scene.gl.drawingBufferWidth;
+    // maxSize = 100;
 
-    var uniforms = {
-        boundsA: bounds[0],
-        boundsB: bounds[1],
-        dims: dims
-    };
+    var volume = { dims: dims, bounds: bounds };
+    this.volumes = splitVolume(volume, maxSize);
+
+    var newSize = this.volumes.reduce(function(max, volume) {
+        return Math.max(max, volume.size);
+    }, 0);
+    scene.resize(newSize, newSize);
 
     this.potentialsProg = scene.createProgramInfo(
         glslify('./shaders/shader.vert'),
@@ -31,52 +31,49 @@ var CubeMarch = function(dims, bounds) {
 
     this.scene = scene;
     this.gl = scene.gl;
-    this.uniforms = uniforms;
-    this.dims = dims;
-    this.bounds = bounds;
     this.startTime = new Date().getTime();
 };
 
-CubeMarch.prototype.march = function(updateGeometry, done, debug) {
+CubeMarch.prototype.sizeBuckets = function(pixels, maxSize) {
+    return Math.ceil(pixels / Math.max(pixels / maxSize));
+};
 
-    var time = function(name) { ! debug && console.time(name); };
-    var timeEnd = function(name) { ! debug && console.timeEnd(name); };
-
-    var scene = this.scene;
-    var gl = this.gl;
-    var dims = this.dims;
-    var bounds = this.bounds;
-
-    var workers = 4;
-    var blocks = 256;
-
-    this.uniforms.time = new Date().getTime() - this.startTime;
-
-    this.scene.draw({
-        program: this.potentialsProg,
-        uniforms: this.uniforms
-    });
-
-    var pixelCount = gl.drawingBufferWidth * gl.drawingBufferHeight;
-    var pixels = new Uint8Array(pixelCount * 4);
-    time("readPixels");
-    gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-    timeEnd("readPixels");
+CubeMarch.prototype.calcPotentials = function(volume, pixels, uniforms, workers) {
     var potentialsBuffer;
     var potentials;
     var blockPotentialBuffers = [];
     var blockPotentials = [];
+
     for (var i = 0; i < workers; i++) {
-        potentialsBuffer = new ArrayBuffer(this.verts * 4);
+        potentialsBuffer = new ArrayBuffer(volume.vertexCount * 4);
         potentials = new Float32Array(potentialsBuffer);
         blockPotentialBuffers.push(potentialsBuffer);
         blockPotentials.push(potentials);
     }
+
     var r, g, b, a;
     var value;
+    var i;
     var bl;
-    time("parsePixels");
-    for (var i = 0; i < this.verts; i++) {
+    var gl = this.gl;
+
+    uniforms.boundsA = volume.bounds[0];
+    uniforms.boundsB = volume.bounds[1];
+    uniforms.dims = volume.dims;
+
+    this.scene.draw({
+        program: this.potentialsProg,
+        uniforms: uniforms
+    });
+
+    gl.readPixels(
+        0, 0,
+        this.gl.drawingBufferWidth, this.gl.drawingBufferHeight,
+        gl.RGBA, gl.UNSIGNED_BYTE,
+        pixels
+    );
+
+    for (i = 0; i < volume.vertexCount; i++) {
         r = pixels[i * 4 + 0];
         g = pixels[i * 4 + 1];
         b = pixels[i * 4 + 2];
@@ -86,14 +83,12 @@ CubeMarch.prototype.march = function(updateGeometry, done, debug) {
             blockPotentials[bl][i] = value;
         }
     }
-    timeEnd("parsePixels");
 
-    if (debug) {
-        return;
-    }
+    return blockPotentialBuffers;
+}
 
-    time("startJobs");
-
+CubeMarch.prototype.marchVolume = function(volume, blockPotentialBuffers, updateGeometry, done) {
+    var workers = blockPotentialBuffers.length;
     var initialSpecs = [];
     var marchSpecs = [];
 
@@ -103,11 +98,13 @@ CubeMarch.prototype.march = function(updateGeometry, done, debug) {
         });
     }
 
+    var workerPool = new WorkerPool('build/workers/march.js', workers);
+    workerPool.each(initialSpecs);
+
+    var blocks = 256;
     var start;
     var end = 0;
-    var cubes = dims[0] * dims[1] * dims[2];
-    var verts = (dims[0] + 1) * (dims[1] + 1) * (dims[2] + 1);
-    var overlap = Math.cbrt(verts) * Math.cbrt(verts);
+    var cubes = volume.dims[0] * volume.dims[1] * volume.dims[2];
     while (blocks--) {
         start = end;
         end = start + Math.floor((cubes - start) / (blocks + 1));
@@ -115,21 +112,45 @@ CubeMarch.prototype.march = function(updateGeometry, done, debug) {
             json: {
                 start: start,
                 end: end,
-                pStart: 0,
-                dims: dims,
-                bounds: bounds
+                dims: volume.dims,
+                bounds: volume.bounds
             }
         });
     }
 
-    time("workerInit");  
-    var workerPool = new WorkerPool('build/workers/march.js', workers);
-    timeEnd("workerInit");  
-    time("workerEach");  
-    workerPool.each(initialSpecs);
     workerPool.each(marchSpecs, updateGeometry, done);
-    timeEnd("workerEach");  
-    timeEnd("startJobs");
+}
+
+CubeMarch.prototype.march = function(updateGeometry, done, debug) {
+
+    var gl = this.gl;
+
+    var workers = 4;
+
+    var uniforms = {
+        time: new Date().getTime() - this.startTime
+    };
+
+    var pixelCount = gl.drawingBufferWidth * gl.drawingBufferHeight;
+    var pixels = new Uint8Array(pixelCount * 4);
+
+    var blockPotentialBuffers;
+    var volumeIndex = 0;
+    var volume;
+
+    var nextVolume = function() {
+        if (volumeIndex >= this.volumes.length) {
+            done();
+            return;
+        }
+        volume = this.volumes[volumeIndex];
+        volumeIndex += 1;
+
+        blockPotentialBuffers = this.calcPotentials(volume, pixels, uniforms, workers);
+        this.marchVolume(volume, blockPotentialBuffers, updateGeometry, nextVolume.bind(this));
+    };
+
+    nextVolume.bind(this)();
 };
 
 module.exports = CubeMarch;

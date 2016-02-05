@@ -12,9 +12,11 @@ var Scene = function(width, height) {
         position: [-1, -1, 0, 1, -1, 0, -1, 1, 0, -1, 1, 0, 1, -1, 0, 1, 1, 0],
     };
     this.bufferInfo = twgl.createBufferInfoFromArrays(this.gl, arrays);
-
-    this.fbi = twgl.createFramebufferInfo(this.gl);
     
+    this.resize(width, height);
+}
+
+Scene.prototype.resize = function(width, height) {
     this.width = width;
     this.height = height;
     this.gl.canvas.width = this.width;

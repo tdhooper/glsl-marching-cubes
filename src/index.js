@@ -7,13 +7,14 @@ var CubeMarch = require("./cubemarch");
 var debugMode = false;
 
 
-var dd = 150;
+var dd = 300;
 var dims = [dd, dd, dd];
 var s = 1;
 var bounds = [
     [-s, -s, -s],
     [s, s, s]
 ];
+
 console.time("init");
 var cubeMarch = new CubeMarch(dims, bounds);
 console.timeEnd("init");
@@ -41,7 +42,7 @@ if (debugMode) {
     var width = window.innerWidth;
     var height = window.innerHeight;
 
-    var camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+    var camera = new THREE.PerspectiveCamera(45, width / height, 0.001, 1000);
     var cameraZoom = 250;
     //var camera = new THREE.OrthographicCamera(width / - cameraZoom, width / cameraZoom, height / cameraZoom, height / - cameraZoom, 1, 1000 );
     camera.position.z = 30;
@@ -116,7 +117,6 @@ if (debugMode) {
 
     console.time('march');
     cubeMarch.march(updateGeometry, done);
-
 
 
     function render() {
