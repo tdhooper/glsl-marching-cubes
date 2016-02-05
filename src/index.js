@@ -1,13 +1,14 @@
 "use strict";
 
 var CubeMarch = require("./cubemarch");
+var STLWriter = require("./stl-writer");
 
 
 
 var debugMode = false;
 
 
-var dd = 300;
+var dd = 100;
 var dims = [dd, dd, dd];
 var s = 1;
 var bounds = [
@@ -79,6 +80,8 @@ if (debugMode) {
     var axisHelper = new THREE.AxisHelper( 1 );
     scene.add( axisHelper );
 
+    var faces = [];
+
     var updateGeometry = function(data) {
 
         if ( ! data) {
@@ -94,6 +97,7 @@ if (debugMode) {
             v1 = data.vertices[ f[0] ];
             v2 = data.vertices[ f[1] ];
             v3 = data.vertices[ f[2] ];
+            faces.push([v1, v2, v3]);
             positions[ (i * 9) + 0 ] = v1[0];
             positions[ (i * 9) + 1 ] = v1[1];
             positions[ (i * 9) + 2 ] = v1[2];
@@ -113,6 +117,8 @@ if (debugMode) {
 
     var done = function() {
         console.timeEnd('march');
+        var stl = new STLWriter();
+        stl.save(faces, 'marched.stl');
     };
 
     console.time('march');

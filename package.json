@@ -15,6 +15,7 @@
   "license": "ISC",
   "dependencies": {
     "a-big-triangle": "^1.0.2",
+    "filesaver.js": "^0.2.0",
     "glsl-parser": "^2.0.0",
     "glsl-read-float": "^1.1.0",
     "glsl-testify": "^1.0.0",
