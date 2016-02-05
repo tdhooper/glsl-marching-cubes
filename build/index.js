@@ -52904,77 +52904,74 @@ var Scene = require('./scene');
 var WorkerPool = require('./worker-pool');
 var R = require('ramda');
 var unpackFloat = require("glsl-read-float");
+var splitVolume = require("./split-volume");
 
 var CubeMarch = function(dims, bounds) {
 
-    this.verts = (dims[0] + 1) * (dims[1] + 1) * (dims[2] + 1);
-    var pixels = this.verts;
-    var size = Math.ceil(Math.sqrt(pixels));
-    // size = nextPowerOfTwo(size);
+    var vertexCount = (dims[0] + 1) * (dims[1] + 1) * (dims[2] + 1);
+    var size = Math.ceil(Math.sqrt(vertexCount));
     var scene = new Scene(size, size);
-    if (size > scene.gl.drawingBufferWidth) {
-        throw new Error('Context too big');
-    }
+    var maxSize = scene.gl.drawingBufferWidth;
+    // maxSize = 100;
 
-    var uniforms = {
-        boundsA: bounds[0],
-        boundsB: bounds[1],
-        dims: dims
-    };
+    var volume = { dims: dims, bounds: bounds };
+    this.volumes = splitVolume(volume, maxSize);
+
+    var newSize = this.volumes.reduce(function(max, volume) {
+        return Math.max(max, volume.size);
+    }, 0);
+    scene.resize(newSize, newSize);
 
     this.potentialsProg = scene.createProgramInfo(
         "#define GLSLIFY 1\nattribute vec3 position;\n\nvoid main() {\n    gl_Position = vec4(position, 1.0);\n}\n",
-        "#define GLSLIFY 1\nprecision mediump float;\n\nint coordToIndex(vec2 coord, vec2 size) {\n    return int(\n        floor(coord.x) + (floor(coord.y) * size.x)\n    );\n}\n\n#define FLOAT_MAX  1.70141184e38\n#define FLOAT_MIN  1.17549435e-38\n\nlowp vec4 encode_float_1117569599(highp float v) {\n  highp float av = abs(v);\n\n  //Handle special cases\n  if(av < FLOAT_MIN) {\n    return vec4(0.0, 0.0, 0.0, 0.0);\n  } else if(v > FLOAT_MAX) {\n    return vec4(127.0, 128.0, 0.0, 0.0) / 255.0;\n  } else if(v < -FLOAT_MAX) {\n    return vec4(255.0, 128.0, 0.0, 0.0) / 255.0;\n  }\n\n  highp vec4 c = vec4(0,0,0,0);\n\n  //Compute exponent and mantissa\n  highp float e = floor(log2(av));\n  highp float m = av * pow(2.0, -e) - 1.0;\n  \n  //Unpack mantissa\n  c[1] = floor(128.0 * m);\n  m -= c[1] / 128.0;\n  c[2] = floor(32768.0 * m);\n  m -= c[2] / 32768.0;\n  c[3] = floor(8388608.0 * m);\n  \n  //Unpack exponent\n  highp float ebias = e + 127.0;\n  c[0] = floor(ebias / 2.0);\n  ebias -= c[0] * 2.0;\n  c[1] += floor(ebias) * 128.0; \n\n  //Unpack sign bit\n  c[0] += 128.0 * step(0.0, -v);\n\n  //Scale back to range\n  return c / 255.0;\n}\n\n#define PHI (sqrt(5.)*0.5 + 0.5)\n#define PI 3.14159265\n\nfloat fOpIntersectionRound(float a, float b, float r) {\n    float m = max(a, b);\n    if ((-a < r) && (-b < r)) {\n        return max(m, -(r - sqrt((r+a)*(r+a) + (r+b)*(r+b))));\n    } else {\n        return m;\n    }\n}\n\n// Cone with correct distances to tip and base circle. Y is up, 0 is in the middle of the base.\nfloat fCone(vec3 p, float radius, float height) {\n    vec2 q = vec2(length(p.xz), p.y);\n    vec2 tip = q - vec2(0, height);\n    vec2 mantleDir = normalize(vec2(height, radius));\n    float mantle = dot(tip, mantleDir);\n    float d = max(mantle, -q.y);\n    float projected = dot(tip, vec2(mantleDir.y, -mantleDir.x));\n    \n    // distance to tip\n    if ((q.y > height) && (projected < 0.)) {\n        d = max(d, length(tip));\n    }\n    \n    // distance to base ring\n    if ((q.x > radius) && (projected > length(vec2(height, radius)))) {\n        d = max(d, length(q - vec2(radius, 0)));\n    }\n    return d;\n}\n\n// Reflect space at a plane\nfloat pReflect(inout vec3 p, vec3 planeNormal, float offset) {\n    float t = dot(p, planeNormal)+offset;\n    if (t < 0.) {\n        p = p - (2.*t)*planeNormal;\n    }\n    return sign(t);\n}\n\n// Rotate around a coordinate axis (i.e. in a plane perpendicular to that axis) by angle <a>.\n// Read like this: R(p.xz, a) rotates \"x towards z\".\n// This is fast if <a> is a compile-time constant and slower (but still practical) if not.\nvoid pR(inout vec2 p, float a) {\n    p = cos(a)*p + sin(a)*vec2(p.y, -p.x);\n}\n\n// The \"Round\" variant uses a quarter-circle to join the two objects smoothly:\nfloat fOpUnionRound(float a, float b, float r) {\n    float m = min(a, b);\n    if ((a < r) && (b < r) ) {\n        return min(m, r - sqrt((r-a)*(r-a) + (r-b)*(r-b)));\n    } else {\n     return m;\n    }\n}\n\n// Repeat around the origin by a fixed angle.\n// For easier use, num of repetitions is use to specify the angle.\nfloat pModPolar(inout vec2 p, float repetitions) {\n    float angle = 2.*PI/repetitions;\n    float a = atan(p.y, p.x) + angle/2.;\n    float r = length(p);\n    float c = floor(a/angle);\n    a = mod(a,angle) - angle/2.;\n    p = vec2(cos(a), sin(a))*r;\n    // For an odd number of repetitions, fix cell index of the cell in -x direction\n    // (cell index would be e.g. -5 and 5 in the two halves of the cell):\n    if (abs(c) >= (repetitions/2.)) c = abs(c);\n    return c;\n}\n\nvec3 pModDodecahedron(inout vec3 p) {\n    vec3 v1 = normalize(vec3(0., PHI, 1.));\n    vec3 v2 = normalize(vec3(PHI, 1., 0.));\n\n    float sides = 5.;\n    float dihedral = acos(dot(v1, v2));\n    float halfDdihedral = dihedral / 2.;\n    float faceAngle = 2. * PI / sides;\n    \n    p.z = abs(p.z);\n    \n    pR(p.xz, -halfDdihedral);\n    pR(p.xy, faceAngle / 4.);\n    \n    p.x = -abs(p.x);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    p.z = -p.z;\n    pModPolar(p.yx, sides);\n    pReflect(p, vec3(-1, 0, 0), 0.);\n    \n    return p;\n}\n\nvec3 pModIcosahedron(inout vec3 p) {\n\n    vec3 v1 = normalize(vec3(1, 1, 1 ));\n    vec3 v2 = normalize(vec3(0, 1, PHI+1.));\n\n    float sides = 3.;\n    float dihedral = acos(dot(v1, v2));\n    float halfDdihedral = dihedral / 2.;\n    float faceAngle = 2. * PI / sides;\n    \n\n    p.z = abs(p.z);    \n    pR(p.yz, halfDdihedral);\n    \n    p.x = -abs(p.x);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n     \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n  \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    p.z = -p.z;\n    pModPolar(p.yx, sides);\n    pReflect(p, vec3(-1, 0, 0), 0.);\n\n    return p;\n}\n\nfloat spikeModel(vec3 p) {\n    pR(p.zy, PI/2.);\n    return fCone(p, 0.25, 3.);\n}\n\nfloat spikesModel(vec3 p) {\n    float smooth = 0.6;\n    \n    pModDodecahedron(p);\n    \n    vec3 v1 = normalize(vec3(0., PHI, 1.));\n    vec3 v2 = normalize(vec3(PHI, 1., 0.));\n\n    float sides = 5.;\n    float dihedral = acos(dot(v1, v2));\n    float halfDdihedral = dihedral / 2.;\n    float faceAngle = 2. * PI / sides;\n    \n    float spikeA = spikeModel(p);\n    \n    pR(p.zy, -dihedral);\n\n    float spikeB = spikeModel(p);\n\n    pR(p.xy, -faceAngle);\n    pR(p.zy, dihedral);\n    \n    float spikeC = spikeModel(p);\n    \n    return fOpUnionRound(\n        spikeC,\n        fOpUnionRound(\n            spikeA,\n            spikeB,\n            smooth\n        ),\n        smooth\n    );\n}\n\nfloat coreModel(vec3 p) {\n    float outer = length(p) - .9;\n    float spikes = spikesModel(p);\n    outer = fOpUnionRound(outer, spikes, 0.4);\n    return outer;\n}\n\nfloat exoSpikeModel(vec3 p) {\n    pR(p.zy, PI/2.);\n    p.y -= 1.;\n    return fCone(p, 0.5, 1.);\n}\n\nfloat exoSpikesModel(vec3 p) {\n    pModIcosahedron(p);\n\n    vec3 v1 = normalize(vec3(1, 1, 1 ));\n    vec3 v2 = normalize(vec3(0, 1, PHI+1.));\n\n    float dihedral = acos(dot(v1, v2));\n\n    float spikeA = exoSpikeModel(p);\n    \n    pR(p.zy, -dihedral);\n\n    float spikeB = exoSpikeModel(p);\n\n    return fOpUnionRound(spikeA, spikeB, 0.5);\n}\n\nfloat exoHolesModel(vec3 p) {\n    float len = 3.;\n    pModDodecahedron(p);\n    p.z += 1.5;\n    return length(p) - .65;\n}\n\nfloat exoModel(vec3 p) {    \n    float thickness = 0.18;\n    float outer = length(p) - 1.5;\n    float inner = outer + thickness;\n\n    float spikes = exoSpikesModel(p);\n    outer = fOpUnionRound(outer, spikes, 0.3);\n    \n    float shell = max(-inner, outer);\n\n    float holes = exoHolesModel(p);\n    shell = fOpIntersectionRound(-holes, shell, thickness/2.);\n    \n    return shell;\n}\n\nfloat doExo(vec3 p) {\n    //return length(p + vec3(0,0,-2)) - 3.;\n    //float disp = (sin(length(p) * 5. - t * 8.)) * 0.03;\n    return exoModel(p);\n}\n\nfloat doCore(vec3 p) {\n    //return length(p + vec3(0,0,2)) - 3.;\n    return coreModel(p);\n}\n\n// checks to see which intersection is closer\n// and makes the y of the vec2 be the proper id\nvec2 opU( vec2 d1, vec2 d2 ){\n    \n    return (d1.x<d2.x) ? d1 : d2;\n    \n}\n\n//--------------------------------\n// Modelling \n//--------------------------------\nfloat map( vec3 p ){  \n    p *= 3.;\n    vec2 res = vec2(doExo(p) ,1.); \n    res = opU(res, vec2(doCore(p) ,2.));\n    \n    return res.x;\n}\n\nuniform vec2 resolution;\n\nuniform vec3 boundsA;\nuniform vec3 boundsB;\nuniform vec3 dims;\nuniform float time;\n\nvec3 vertDims = dims + vec3(1);\nvec3 scale = (boundsB - boundsA) / dims;\nvec3 shift = boundsA;\n\n// float map(vec3 p) {\n//     return length(p) - .5 + sin(time / 1000.) * .2;\n// }\n\nvec3 vertFromIndex(float index) {\n    vec3 vert = vec3(0);\n    vert.x = mod(index, vertDims.x);\n    vert.y = mod(floor(index / vertDims.x), vertDims.y);\n    vert.z = mod(floor(index / (vertDims.y * vertDims.x)), vertDims.z);\n    return scale * vert + shift; \n}\n\nvoid main() {\n\n    float vertIndex = float(coordToIndex(gl_FragCoord.xy, resolution.xy));\n\n    if (vertIndex >= vertDims.x * vertDims.y * vertDims.z) {\n        gl_FragColor = vec4(1);\n        return;\n    }\n\n    vec3 vert = vertFromIndex(vertIndex);\n    float potential = map(vert);\n    gl_FragColor = encode_float_1117569599(potential);\n}\n"
+        "#define GLSLIFY 1\nprecision mediump float;\n\nint coordToIndex(vec2 coord, vec2 size) {\n    return int(\n        floor(coord.x) + (floor(coord.y) * size.x)\n    );\n}\n\n#define FLOAT_MAX  1.70141184e38\n#define FLOAT_MIN  1.17549435e-38\n\nlowp vec4 encode_float_1117569599(highp float v) {\n  highp float av = abs(v);\n\n  //Handle special cases\n  if(av < FLOAT_MIN) {\n    return vec4(0.0, 0.0, 0.0, 0.0);\n  } else if(v > FLOAT_MAX) {\n    return vec4(127.0, 128.0, 0.0, 0.0) / 255.0;\n  } else if(v < -FLOAT_MAX) {\n    return vec4(255.0, 128.0, 0.0, 0.0) / 255.0;\n  }\n\n  highp vec4 c = vec4(0,0,0,0);\n\n  //Compute exponent and mantissa\n  highp float e = floor(log2(av));\n  highp float m = av * pow(2.0, -e) - 1.0;\n  \n  //Unpack mantissa\n  c[1] = floor(128.0 * m);\n  m -= c[1] / 128.0;\n  c[2] = floor(32768.0 * m);\n  m -= c[2] / 32768.0;\n  c[3] = floor(8388608.0 * m);\n  \n  //Unpack exponent\n  highp float ebias = e + 127.0;\n  c[0] = floor(ebias / 2.0);\n  ebias -= c[0] * 2.0;\n  c[1] += floor(ebias) * 128.0; \n\n  //Unpack sign bit\n  c[0] += 128.0 * step(0.0, -v);\n\n  //Scale back to range\n  return c / 255.0;\n}\n\n#define PHI (sqrt(5.)*0.5 + 0.5)\n#define PI 3.14159265\n\nfloat fOpIntersectionRound(float a, float b, float r) {\n    float m = max(a, b);\n    if ((-a < r) && (-b < r)) {\n        return max(m, -(r - sqrt((r+a)*(r+a) + (r+b)*(r+b))));\n    } else {\n        return m;\n    }\n}\n\n// Cone with correct distances to tip and base circle. Y is up, 0 is in the middle of the base.\nfloat fCone(vec3 p, float radius, float height) {\n    vec2 q = vec2(length(p.xz), p.y);\n    vec2 tip = q - vec2(0, height);\n    vec2 mantleDir = normalize(vec2(height, radius));\n    float mantle = dot(tip, mantleDir);\n    float d = max(mantle, -q.y);\n    float projected = dot(tip, vec2(mantleDir.y, -mantleDir.x));\n    \n    // distance to tip\n    if ((q.y > height) && (projected < 0.)) {\n        d = max(d, length(tip));\n    }\n    \n    // distance to base ring\n    if ((q.x > radius) && (projected > length(vec2(height, radius)))) {\n        d = max(d, length(q - vec2(radius, 0)));\n    }\n    return d;\n}\n\n// Reflect space at a plane\nfloat pReflect(inout vec3 p, vec3 planeNormal, float offset) {\n    float t = dot(p, planeNormal)+offset;\n    if (t < 0.) {\n        p = p - (2.*t)*planeNormal;\n    }\n    return sign(t);\n}\n\n// Rotate around a coordinate axis (i.e. in a plane perpendicular to that axis) by angle <a>.\n// Read like this: R(p.xz, a) rotates \"x towards z\".\n// This is fast if <a> is a compile-time constant and slower (but still practical) if not.\nvoid pR(inout vec2 p, float a) {\n    p = cos(a)*p + sin(a)*vec2(p.y, -p.x);\n}\n\n// The \"Round\" variant uses a quarter-circle to join the two objects smoothly:\nfloat fOpUnionRound(float a, float b, float r) {\n    float m = min(a, b);\n    if ((a < r) && (b < r) ) {\n        return min(m, r - sqrt((r-a)*(r-a) + (r-b)*(r-b)));\n    } else {\n     return m;\n    }\n}\n\n// Repeat around the origin by a fixed angle.\n// For easier use, num of repetitions is use to specify the angle.\nfloat pModPolar(inout vec2 p, float repetitions) {\n    float angle = 2.*PI/repetitions;\n    float a = atan(p.y, p.x) + angle/2.;\n    float r = length(p);\n    float c = floor(a/angle);\n    a = mod(a,angle) - angle/2.;\n    p = vec2(cos(a), sin(a))*r;\n    // For an odd number of repetitions, fix cell index of the cell in -x direction\n    // (cell index would be e.g. -5 and 5 in the two halves of the cell):\n    if (abs(c) >= (repetitions/2.)) c = abs(c);\n    return c;\n}\n\nvec3 pModDodecahedron(inout vec3 p) {\n    vec3 v1 = normalize(vec3(0., PHI, 1.));\n    vec3 v2 = normalize(vec3(PHI, 1., 0.));\n\n    float sides = 5.;\n    float dihedral = acos(dot(v1, v2));\n    float halfDdihedral = dihedral / 2.;\n    float faceAngle = 2. * PI / sides;\n    \n    p.z = abs(p.z);\n    \n    pR(p.xz, -halfDdihedral);\n    pR(p.xy, faceAngle / 4.);\n    \n    p.x = -abs(p.x);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    p.z = -p.z;\n    pModPolar(p.yx, sides);\n    pReflect(p, vec3(-1, 0, 0), 0.);\n    \n    return p;\n}\n\nvec3 pModIcosahedron(inout vec3 p) {\n\n    vec3 v1 = normalize(vec3(1, 1, 1 ));\n    vec3 v2 = normalize(vec3(0, 1, PHI+1.));\n\n    float sides = 3.;\n    float dihedral = acos(dot(v1, v2));\n    float halfDdihedral = dihedral / 2.;\n    float faceAngle = 2. * PI / sides;\n    \n\n    p.z = abs(p.z);    \n    pR(p.yz, halfDdihedral);\n    \n    p.x = -abs(p.x);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n     \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n  \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    p.z = -p.z;\n    pModPolar(p.yx, sides);\n    pReflect(p, vec3(-1, 0, 0), 0.);\n\n    return p;\n}\n\nfloat spikeModel(vec3 p) {\n    pR(p.zy, PI/2.);\n    return fCone(p, 0.25, 3.);\n}\n\nfloat spikesModel(vec3 p) {\n    float smooth = 0.6;\n    \n    pModDodecahedron(p);\n    \n    vec3 v1 = normalize(vec3(0., PHI, 1.));\n    vec3 v2 = normalize(vec3(PHI, 1., 0.));\n\n    float sides = 5.;\n    float dihedral = acos(dot(v1, v2));\n    float halfDdihedral = dihedral / 2.;\n    float faceAngle = 2. * PI / sides;\n    \n    float spikeA = spikeModel(p);\n    \n    pR(p.zy, -dihedral);\n\n    float spikeB = spikeModel(p);\n\n    pR(p.xy, -faceAngle);\n    pR(p.zy, dihedral);\n    \n    float spikeC = spikeModel(p);\n    \n    return fOpUnionRound(\n        spikeC,\n        fOpUnionRound(\n            spikeA,\n            spikeB,\n            smooth\n        ),\n        smooth\n    );\n}\n\nfloat coreModel(vec3 p) {\n    float outer = length(p) - .9;\n    float spikes = spikesModel(p);\n    outer = fOpUnionRound(outer, spikes, 0.4);\n    return outer;\n}\n\nfloat exoSpikeModel(vec3 p) {\n    pR(p.zy, PI/2.);\n    p.y -= 1.;\n    return fCone(p, 0.5, 1.);\n}\n\nfloat exoSpikesModel(vec3 p) {\n    pModIcosahedron(p);\n\n    vec3 v1 = normalize(vec3(1, 1, 1 ));\n    vec3 v2 = normalize(vec3(0, 1, PHI+1.));\n\n    float dihedral = acos(dot(v1, v2));\n\n    float spikeA = exoSpikeModel(p);\n    \n    pR(p.zy, -dihedral);\n\n    float spikeB = exoSpikeModel(p);\n\n    return fOpUnionRound(spikeA, spikeB, 0.5);\n}\n\nfloat exoHolesModel(vec3 p) {\n    float len = 3.;\n    pModDodecahedron(p);\n    p.z += 1.5;\n    return length(p) - .65;\n}\n\nfloat exoModel(vec3 p) {    \n    float thickness = 0.18;\n    float outer = length(p) - 1.5;\n    float inner = outer + thickness;\n\n    float spikes = exoSpikesModel(p);\n    outer = fOpUnionRound(outer, spikes, 0.3);\n    \n    float shell = max(-inner, outer);\n\n    float holes = exoHolesModel(p);\n    shell = fOpIntersectionRound(-holes, shell, thickness/2.);\n    \n    return shell;\n}\n\nfloat doExo(vec3 p) {\n    //return length(p + vec3(0,0,-2)) - 3.;\n    //float disp = (sin(length(p) * 5. - t * 8.)) * 0.03;\n    return exoModel(p);\n}\n\nfloat doCore(vec3 p) {\n    //return length(p + vec3(0,0,2)) - 3.;\n    return coreModel(p);\n}\n\n// checks to see which intersection is closer\n// and makes the y of the vec2 be the proper id\nvec2 opU( vec2 d1, vec2 d2 ){\n    \n    return (d1.x<d2.x) ? d1 : d2;\n    \n}\n\n//--------------------------------\n// Modelling \n//--------------------------------\nfloat map( vec3 p ){  \n    p *= 3.;\n    vec2 res = vec2(doExo(p) ,1.); \n    res = opU(res, vec2(doCore(p) ,2.));\n    \n    return res.x;\n}\n\nuniform vec2 resolution;\n\nuniform vec3 boundsA;\nuniform vec3 boundsB;\nuniform vec3 dims;\nuniform float time;\n\nvec3 vertDims = dims + vec3(1);\nvec3 scale = (boundsB - boundsA) / dims;\nvec3 shift = boundsA;\n\n// float map(vec3 p) {\n//     return length(p) - .5 + sin(time / 1000.) * .2;\n// }\n\n// void pR(inout vec2 p, float a) {\n//     p = cos(a)*p + sin(a)*vec2(p.y, -p.x);\n// }\n\n// float vmax(vec3 v) {\n//     return max(max(v.x, v.y), v.z);\n// }\n\n// // Box: correct distance to corners\n// float fBox(vec3 p, vec3 b) {\n//     vec3 d = abs(p) - b;\n//     return length(max(d, vec3(0))) + vmax(min(d, vec3(0)));\n// }\n\n// float map(vec3 p) {\n//     // return length(p) - .5 + sin(time / 1000.) * .2;\n//     // return length(p) - .9;\n//     pR(p.xy, .5);\n//     pR(p.zx, .2);\n//     return fBox(p, vec3(.5));\n// }\n\nvec3 vertFromIndex(float index) {\n    vec3 vert = vec3(0);\n    vert.x = mod(index, vertDims.x);\n    vert.y = mod(floor(index / vertDims.x), vertDims.y);\n    vert.z = mod(floor(index / (vertDims.y * vertDims.x)), vertDims.z);\n    return scale * vert + shift; \n}\n\nvoid main() {\n\n    float vertIndex = float(coordToIndex(gl_FragCoord.xy, resolution.xy));\n\n    if (vertIndex >= vertDims.x * vertDims.y * vertDims.z) {\n        gl_FragColor = vec4(1);\n        return;\n    }\n\n    vec3 vert = vertFromIndex(vertIndex);\n    float potential = map(vert);\n    gl_FragColor = encode_float_1117569599(potential);\n}\n"
     );
 
     this.scene = scene;
     this.gl = scene.gl;
-    this.uniforms = uniforms;
-    this.dims = dims;
-    this.bounds = bounds;
     this.startTime = new Date().getTime();
 };
 
-CubeMarch.prototype.march = function(updateGeometry, done, debug) {
+CubeMarch.prototype.sizeBuckets = function(pixels, maxSize) {
+    return Math.ceil(pixels / Math.max(pixels / maxSize));
+};
 
-    var time = function(name) { ! debug && console.time(name); };
-    var timeEnd = function(name) { ! debug && console.timeEnd(name); };
-
-    var scene = this.scene;
-    var gl = this.gl;
-    var dims = this.dims;
-    var bounds = this.bounds;
-
-    var workers = 4;
-    var blocks = 256;
-
-    this.uniforms.time = new Date().getTime() - this.startTime;
-
-    this.scene.draw({
-        program: this.potentialsProg,
-        uniforms: this.uniforms
-    });
-
-    var pixelCount = gl.drawingBufferWidth * gl.drawingBufferHeight;
-    var pixels = new Uint8Array(pixelCount * 4);
-    time("readPixels");
-    gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-    timeEnd("readPixels");
+CubeMarch.prototype.calcPotentials = function(volume, pixels, uniforms, workers) {
     var potentialsBuffer;
     var potentials;
     var blockPotentialBuffers = [];
     var blockPotentials = [];
+
     for (var i = 0; i < workers; i++) {
-        potentialsBuffer = new ArrayBuffer(this.verts * 4);
+        potentialsBuffer = new ArrayBuffer(volume.vertexCount * 4);
         potentials = new Float32Array(potentialsBuffer);
         blockPotentialBuffers.push(potentialsBuffer);
         blockPotentials.push(potentials);
     }
+
     var r, g, b, a;
     var value;
+    var i;
     var bl;
-    time("parsePixels");
-    for (var i = 0; i < this.verts; i++) {
+    var gl = this.gl;
+
+    uniforms.boundsA = volume.bounds[0];
+    uniforms.boundsB = volume.bounds[1];
+    uniforms.dims = volume.dims;
+
+    this.scene.draw({
+        program: this.potentialsProg,
+        uniforms: uniforms
+    });
+
+    gl.readPixels(
+        0, 0,
+        this.gl.drawingBufferWidth, this.gl.drawingBufferHeight,
+        gl.RGBA, gl.UNSIGNED_BYTE,
+        pixels
+    );
+
+    for (i = 0; i < volume.vertexCount; i++) {
         r = pixels[i * 4 + 0];
         g = pixels[i * 4 + 1];
         b = pixels[i * 4 + 2];
@@ -52984,14 +52981,12 @@ CubeMarch.prototype.march = function(updateGeometry, done, debug) {
             blockPotentials[bl][i] = value;
         }
     }
-    timeEnd("parsePixels");
 
-    if (debug) {
-        return;
-    }
+    return blockPotentialBuffers;
+}
 
-    time("startJobs");
-
+CubeMarch.prototype.marchVolume = function(volume, blockPotentialBuffers, updateGeometry, done) {
+    var workers = blockPotentialBuffers.length;
     var initialSpecs = [];
     var marchSpecs = [];
 
@@ -53001,11 +52996,13 @@ CubeMarch.prototype.march = function(updateGeometry, done, debug) {
         });
     }
 
+    var workerPool = new WorkerPool('build/workers/march.js', workers);
+    workerPool.each(initialSpecs);
+
+    var blocks = 256;
     var start;
     var end = 0;
-    var cubes = dims[0] * dims[1] * dims[2];
-    var verts = (dims[0] + 1) * (dims[1] + 1) * (dims[2] + 1);
-    var overlap = Math.cbrt(verts) * Math.cbrt(verts);
+    var cubes = volume.dims[0] * volume.dims[1] * volume.dims[2];
     while (blocks--) {
         start = end;
         end = start + Math.floor((cubes - start) / (blocks + 1));
@@ -53013,26 +53010,50 @@ CubeMarch.prototype.march = function(updateGeometry, done, debug) {
             json: {
                 start: start,
                 end: end,
-                pStart: 0,
-                dims: dims,
-                bounds: bounds
+                dims: volume.dims,
+                bounds: volume.bounds
             }
         });
     }
 
-    time("workerInit");  
-    var workerPool = new WorkerPool('build/workers/march.js', workers);
-    timeEnd("workerInit");  
-    time("workerEach");  
-    workerPool.each(initialSpecs);
     workerPool.each(marchSpecs, updateGeometry, done);
-    timeEnd("workerEach");  
-    timeEnd("startJobs");
+}
+
+CubeMarch.prototype.march = function(updateGeometry, done, debug) {
+
+    var gl = this.gl;
+
+    var workers = 4;
+
+    var uniforms = {
+        time: new Date().getTime() - this.startTime
+    };
+
+    var pixelCount = gl.drawingBufferWidth * gl.drawingBufferHeight;
+    var pixels = new Uint8Array(pixelCount * 4);
+
+    var blockPotentialBuffers;
+    var volumeIndex = 0;
+    var volume;
+
+    var nextVolume = function() {
+        if (volumeIndex >= this.volumes.length) {
+            done();
+            return;
+        }
+        volume = this.volumes[volumeIndex];
+        volumeIndex += 1;
+
+        blockPotentialBuffers = this.calcPotentials(volume, pixels, uniforms, workers);
+        this.marchVolume(volume, blockPotentialBuffers, updateGeometry, nextVolume.bind(this));
+    };
+
+    nextVolume.bind(this)();
 };
 
 module.exports = CubeMarch;
 
-},{"./scene":16,"./worker-pool":17,"glsl-read-float":3,"ramda":9,"twgl.js":13}],15:[function(require,module,exports){
+},{"./scene":16,"./split-volume":17,"./worker-pool":18,"glsl-read-float":3,"ramda":9,"twgl.js":13}],15:[function(require,module,exports){
 "use strict";
 
 var CubeMarch = require("./cubemarch");
@@ -53042,13 +53063,14 @@ var CubeMarch = require("./cubemarch");
 var debugMode = false;
 
 
-var dd = 150;
+var dd = 300;
 var dims = [dd, dd, dd];
 var s = 1;
 var bounds = [
     [-s, -s, -s],
     [s, s, s]
 ];
+
 console.time("init");
 var cubeMarch = new CubeMarch(dims, bounds);
 console.timeEnd("init");
@@ -53076,7 +53098,7 @@ if (debugMode) {
     var width = window.innerWidth;
     var height = window.innerHeight;
 
-    var camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+    var camera = new THREE.PerspectiveCamera(45, width / height, 0.001, 1000);
     var cameraZoom = 250;
     //var camera = new THREE.OrthographicCamera(width / - cameraZoom, width / cameraZoom, height / cameraZoom, height / - cameraZoom, 1, 1000 );
     camera.position.z = 30;
@@ -53153,7 +53175,6 @@ if (debugMode) {
     cubeMarch.march(updateGeometry, done);
 
 
-
     function render() {
         renderer.render(scene, camera);
     }
@@ -53221,9 +53242,11 @@ var Scene = function(width, height) {
         position: [-1, -1, 0, 1, -1, 0, -1, 1, 0, -1, 1, 0, 1, -1, 0, 1, 1, 0],
     };
     this.bufferInfo = twgl.createBufferInfoFromArrays(this.gl, arrays);
-
-    this.fbi = twgl.createFramebufferInfo(this.gl);
     
+    this.resize(width, height);
+}
+
+Scene.prototype.resize = function(width, height) {
     this.width = width;
     this.height = height;
     this.gl.canvas.width = this.width;
@@ -53307,6 +53330,109 @@ module.exports = Scene;
 
 },{"twgl.js":13}],17:[function(require,module,exports){
 
+var maxDimension = function(dims) {
+    if (dims[0] > dims[1]) {
+        if (dims[0] > dims[2]) {
+            return 0;
+        }
+    } else if (dims[1] > dims[2]) {
+        return 1;
+    }
+    return 2;
+};
+
+var subVectors = function(a, b) {
+    var c = [];
+    c[0] = a[0] - b[0];
+    c[1] = a[1] - b[1];
+    c[2] = a[2] - b[2];
+    return c;
+};
+
+var addVectors = function(a, b) {
+    var c = [];
+    c[0] = a[0] + b[0];
+    c[1] = a[1] + b[1];
+    c[2] = a[2] + b[2];
+    return c;
+};
+
+var multiplyVectors = function(a, b) {
+    var c = [];
+    c[0] = a[0] * b[0];
+    c[1] = a[1] * b[1];
+    c[2] = a[2] * b[2];
+    return c;
+};
+
+var ceilVector = function(a) {
+    var c = [];
+    c[0] = Math.ceil(a[0]);
+    c[1] = Math.ceil(a[1]);
+    c[2] = Math.ceil(a[2]);
+    return c;
+};
+
+var volumeFits = function(volume, maxSize) {
+    var vertexDims = addVectors(volume.dims, [1, 1, 1]);
+    var vertexCount = vertexDims[0] * vertexDims[1] * vertexDims[2];
+    var maxVerts = Math.pow(maxSize, 2);
+    return vertexCount < maxVerts;
+}
+
+var splitVolume = function(volume, maxSize) {
+    var volumes = [];
+    var bounds = volume.bounds;
+    var dims = volume.dims;
+
+    if ( ! volumeFits(volume, maxSize)) {
+        var size = subVectors(bounds[1], bounds[0]);
+        var slice = [1, 1, 1];
+        slice[maxDimension(dims)] = 0.5;
+        size = multiplyVectors(size, slice);
+
+        volumes.push({
+            bounds: [
+                bounds[0],
+                addVectors(bounds[0], size)
+            ],
+            dims: ceilVector(multiplyVectors(dims, slice))
+        });
+        volumes.push({
+            bounds: [
+                subVectors(bounds[1], size),
+                bounds[1]
+            ],
+            dims: ceilVector(multiplyVectors(dims, slice))
+        });
+    } else {
+        volumes.push({
+            bounds: bounds,
+            dims: dims
+        });
+    }
+
+    volumes = volumes.reduce(function(vs, volume) {
+        if (volumeFits(volume, maxSize)) {
+            return vs.concat(volume);
+        }
+        return vs.concat(splitVolume(volume, maxSize));
+    }, []);
+
+    volumes = volumes.map(function(volume) {
+        volume.vertexDims = addVectors(volume.dims, [1, 1, 1]);
+        volume.vertexCount = volume.vertexDims[0] * volume.vertexDims[1] * volume.vertexDims[2];
+        volume.size = Math.ceil(Math.sqrt(volume.vertexCount));
+        return volume;
+    });
+
+    return volumes;
+}
+
+module.exports = splitVolume;
+
+},{}],18:[function(require,module,exports){
+
 var WorkerPool = function(filename, n) {
     this.workers = [];
     this.queue = [];
@@ -53327,9 +53453,7 @@ WorkerPool.prototype.each = function(configs, update, done) {
     configs.forEach(function(config, i) {
         worker = this.workers[i];
         if (worker) {
-            console.time("postMessage");
             this.post(worker, config);
-            console.timeEnd("postMessage");
         } else {
             this.queue.push(config);
         }
