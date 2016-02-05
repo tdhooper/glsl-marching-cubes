@@ -19,9 +19,7 @@ WorkerPool.prototype.each = function(configs, update, done) {
     configs.forEach(function(config, i) {
         worker = this.workers[i];
         if (worker) {
-            console.time("postMessage");
             this.post(worker, config);
-            console.timeEnd("postMessage");
         } else {
             this.queue.push(config);
         }
