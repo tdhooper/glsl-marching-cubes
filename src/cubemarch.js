@@ -9,7 +9,6 @@ var unpackFloat = require("glsl-read-float");
 var splitVolume = require("./split-volume");
 
 var CubeMarch = function(dims, bounds) {
-
     var vertexCount = (dims[0] + 1) * (dims[1] + 1) * (dims[2] + 1);
     var size = Math.ceil(Math.sqrt(vertexCount));
     var scene = new Scene(size, size);
@@ -29,6 +28,7 @@ var CubeMarch = function(dims, bounds) {
         glslify('./shaders/calc-potentials.frag')
     );
 
+    this.totalCubes = dims[0] * dims[1] * dims[2];
     this.scene = scene;
     this.gl = scene.gl;
     this.startTime = new Date().getTime();
@@ -38,7 +38,8 @@ CubeMarch.prototype.sizeBuckets = function(pixels, maxSize) {
     return Math.ceil(pixels / Math.max(pixels / maxSize));
 };
 
-CubeMarch.prototype.calcPotentials = function(volume, pixels, uniforms, workers) {
+CubeMarch.prototype.calcPotentials = function(volumeIndex, pixels, uniforms, workers) {
+    var volume = this.volumes[volumeIndex];
     var potentialsBuffer;
     var potentials;
     var blockPotentialBuffers = [];
@@ -87,7 +88,8 @@ CubeMarch.prototype.calcPotentials = function(volume, pixels, uniforms, workers)
     return blockPotentialBuffers;
 }
 
-CubeMarch.prototype.marchVolume = function(volume, blockPotentialBuffers, updateGeometry, done) {
+CubeMarch.prototype.marchVolume = function(volumeIndex, blockPotentialBuffers, updateGeometry, done) {
+    var volume = this.volumes[volumeIndex];
     var workers = blockPotentialBuffers.length;
     var initialSpecs = [];
     var marchSpecs = [];
@@ -118,11 +120,18 @@ CubeMarch.prototype.marchVolume = function(volume, blockPotentialBuffers, update
         });
     }
 
-    workerPool.each(marchSpecs, updateGeometry, done);
+    var update = function(data, configIndex) {
+        var spec = marchSpecs[configIndex].json;
+        this.cubesMarched += spec.end - spec.start;
+        updateGeometry(data, this.cubesMarched, this.totalCubes);
+    };
+
+    workerPool.each(marchSpecs, update.bind(this), done);
 }
 
 CubeMarch.prototype.march = function(updateGeometry, done, debug) {
 
+    this.cubesMarched = 0;
     var gl = this.gl;
 
     var workers = 4;
@@ -136,18 +145,17 @@ CubeMarch.prototype.march = function(updateGeometry, done, debug) {
 
     var blockPotentialBuffers;
     var volumeIndex = 0;
-    var volume;
 
     var nextVolume = function() {
         if (volumeIndex >= this.volumes.length) {
             done();
             return;
         }
-        volume = this.volumes[volumeIndex];
-        volumeIndex += 1;
 
-        blockPotentialBuffers = this.calcPotentials(volume, pixels, uniforms, workers);
-        this.marchVolume(volume, blockPotentialBuffers, updateGeometry, nextVolume.bind(this));
+        blockPotentialBuffers = this.calcPotentials(volumeIndex, pixels, uniforms, workers);
+        this.marchVolume(volumeIndex, blockPotentialBuffers, updateGeometry, nextVolume.bind(this));
+
+        volumeIndex += 1;
     };
 
     nextVolume.bind(this)();

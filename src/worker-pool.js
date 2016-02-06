@@ -5,7 +5,6 @@ var WorkerPool = function(filename, n) {
     var worker;
     while (n--) {
         worker = new Worker(filename)
-        worker.onmessage = this.finished.bind(this, worker);
         this.workers.push(worker);
     }
 };
@@ -19,26 +18,27 @@ WorkerPool.prototype.each = function(configs, update, done) {
     configs.forEach(function(config, i) {
         worker = this.workers[i];
         if (worker) {
-            this.post(worker, config);
+            this.post(worker, config, i);
         } else {
-            this.queue.push(config);
+            this.queue.push([config, i]);
         }
     }, this);
 };
 
-WorkerPool.prototype.finished = function(worker, evt) {
-    this.update(evt.data);
+WorkerPool.prototype.finished = function(worker, configIndex, evt) {
+    this.update(evt.data, configIndex);
     this.doneCount -= 1;
     if (this.doneCount == 0) {
         this.done();
     }
     var config = this.queue.pop();
     if (config) {
-        this.post(worker, config);
+        this.post(worker, config[0], config[1]);
     }
 };
 
-WorkerPool.prototype.post = function(worker, config) {
+WorkerPool.prototype.post = function(worker, config, configIndex) {
+    worker.onmessage = this.finished.bind(this, worker, configIndex);
     if (config.hasOwnProperty('json')) {
         worker.postMessage(config.json);
     }

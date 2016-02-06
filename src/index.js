@@ -8,7 +8,7 @@ var STLWriter = require("./stl-writer");
 var debugMode = false;
 
 
-var dd = 100;
+var dd = 300;
 var dims = [dd, dd, dd];
 var s = 1;
 var bounds = [
@@ -82,14 +82,22 @@ if (debugMode) {
 
     var faces = [];
 
-    var updateGeometry = function(data) {
+    var norender = true;
+
+    var progressEl = document.getElementById('progress');
+
+    var updateGeometry = function(data, cubesMarched, totalCubes) {
+
+        progressEl.innerHTML = ((cubesMarched / totalCubes) * 100).toFixed(2) + '% complete';
 
         if ( ! data) {
             return;
         }
 
-        var geometry = new THREE.BufferGeometry();
-        var positions = new Float32Array( data.faces.length * 3 * 3 );
+        if ( ! norender) {
+            var geometry = new THREE.BufferGeometry();
+            var positions = new Float32Array( data.faces.length * 3 * 3 );
+        }
 
         var f, v1, v2, v3, offset;
         for (var i = 0; i < data.faces.length; ++i) {
@@ -98,6 +106,9 @@ if (debugMode) {
             v2 = data.vertices[ f[1] ];
             v3 = data.vertices[ f[2] ];
             faces.push([v1, v2, v3]);
+            if (norender) {
+                continue;
+            }
             positions[ (i * 9) + 0 ] = v1[0];
             positions[ (i * 9) + 1 ] = v1[1];
             positions[ (i * 9) + 2 ] = v1[2];
@@ -107,6 +118,10 @@ if (debugMode) {
             positions[ (i * 9) + 6 ] = v3[0];
             positions[ (i * 9) + 7 ] = v3[1];
             positions[ (i * 9) + 8 ] = v3[2];
+        }
+
+        if (norender) {
+            return;
         }
 
         var positionBuffer = new THREE.BufferAttribute( positions, 3 );
