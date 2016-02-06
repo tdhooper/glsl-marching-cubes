@@ -80,15 +80,18 @@ if (debugMode) {
     var axisHelper = new THREE.AxisHelper( 1 );
     scene.add( axisHelper );
 
-    var faces = [];
+    var facesIndex = -1;
+    var numFaces = 0;
+    var faces = new Float32Array(60000000);
 
     var norender = true;
+    // var norender = false;
 
     var progressEl = document.getElementById('progress');
 
     var updateGeometry = function(data, cubesMarched, totalCubes) {
 
-        progressEl.innerHTML = ((cubesMarched / totalCubes) * 100).toFixed(2) + '% complete';
+        progressEl.innerHTML = ((cubesMarched / totalCubes) * 100).toFixed(2) + '% complete (' + numFaces + ' faces, ' + facesIndex + 1 + 'vertices)';
 
         if ( ! data) {
             return;
@@ -105,7 +108,16 @@ if (debugMode) {
             v1 = data.vertices[ f[0] ];
             v2 = data.vertices[ f[1] ];
             v3 = data.vertices[ f[2] ];
-            faces.push([v1, v2, v3]);
+            faces[++facesIndex] = v1[0];
+            faces[++facesIndex] = v1[1];
+            faces[++facesIndex] = v1[2];
+            faces[++facesIndex] = v2[0];
+            faces[++facesIndex] = v2[1];
+            faces[++facesIndex] = v2[2];
+            faces[++facesIndex] = v3[0];
+            faces[++facesIndex] = v3[1];
+            faces[++facesIndex] = v3[2];
+            numFaces = (facesIndex + 1) / 9;
             if (norender) {
                 continue;
             }
@@ -133,7 +145,7 @@ if (debugMode) {
     var done = function() {
         console.timeEnd('march');
         var stl = new STLWriter();
-        stl.save(faces, 'marched.stl');
+        stl.save(faces, numFaces, 'marched.stl');
     };
 
     console.time('march');

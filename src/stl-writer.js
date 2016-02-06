@@ -26,8 +26,7 @@ STLWriter.prototype = {
         return normal;
     },
 
-    geometryToDataView: function(faces) {
-        var len = faces.length;
+    geometryToDataView: function(faces, len) {
         var isLittleEndian = true; // STL files assume little endian, see wikipedia page
         
         var bufferSize = 84 + (50 * len);
@@ -39,20 +38,36 @@ STLWriter.prototype = {
 
         dv.setUint32(offset, len, isLittleEndian);
         offset += 4;
+        var face = [];
 
         for(var n = 0; n < len; n++) {
-            offset = this.writeVector(dv, offset, this.calcNormal(faces[n]), isLittleEndian);
-            offset = this.writeVector(dv, offset, faces[n][0], isLittleEndian);
-            offset = this.writeVector(dv, offset, faces[n][1], isLittleEndian);
-            offset = this.writeVector(dv, offset, faces[n][2], isLittleEndian);
+            face[0] = [
+                faces[n * 9 + 0],
+                faces[n * 9 + 1],
+                faces[n * 9 + 2]
+            ];
+            face[1] = [
+                faces[n * 9 + 3],
+                faces[n * 9 + 4],
+                faces[n * 9 + 5]
+            ];
+            face[2] = [
+                faces[n * 9 + 6],
+                faces[n * 9 + 7],
+                faces[n * 9 + 8]
+            ];
+            offset = this.writeVector(dv, offset, this.calcNormal(face), isLittleEndian);
+            offset = this.writeVector(dv, offset, face[0], isLittleEndian);
+            offset = this.writeVector(dv, offset, face[1], isLittleEndian);
+            offset = this.writeVector(dv, offset, face[2], isLittleEndian);
             offset += 2; // unused 'attribute byte count' is a Uint16
         }
 
         return dv;
     },
 
-    save: function(geometry, filename) {
-        var dv = this.geometryToDataView(geometry);
+    save: function(faces, len, filename) {
+        var dv = this.geometryToDataView(faces, len);
         var blob = new Blob([dv], {type: 'application/octet-binary'});
         FileSaver.saveAs(blob, filename);
     }
