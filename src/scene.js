@@ -4,7 +4,6 @@ var twgl = require("twgl.js");
 
 var Scene = function(width, height) {
     this.canvas = document.createElement('canvas');
-    document.body.appendChild(this.canvas);
 
     this.gl = twgl.getWebGLContext(this.canvas);
 

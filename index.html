@@ -9,7 +9,13 @@
                 background: #111;
             }
 
-            #three {
+            #background canvas {
+                position: absolute;
+                top: 0;
+                left: 0;
+            }
+
+            #scene canvas {
                 position: absolute;
                 top: 0;
                 left: 0;
@@ -18,27 +24,25 @@
                 display: block;
             }
 
-            #stats {
+            #ui {
+                background: black;
                 position: fixed;
                 right: 0;
                 top: 0;
-                zoom: 2;
+                color: white;
+                width: 200px;
             }
 
             .progress {
-                position: fixed;
-                top: 0;
-                right: 0;
                 margin: 0;
                 padding: 20px;
-                background: black;
-                color: white;
-                z-index: 1;
             }
         </style>
     </head>
     <body>
-        <p class="progress" id="progress"></p>
+        <div id="background"></div>
+        <div id="scene"></div>
+        <div id="ui"></div>
         <script src="build/index.js"></script>
     </body>
 </html>

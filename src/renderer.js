@@ -3,14 +3,13 @@
 var THREE = require('three');
 THREE.TrackballControls = require('three.trackball');
 
-var Renderer = function() {
+var Renderer = function(el) {
 
     var width = window.innerWidth;
     var height = window.innerHeight;
 
     var camera = new THREE.PerspectiveCamera(45, width / height, 0.001, 1000);
-    var cameraZoom = 250;
-    camera.position.z = 30;
+    camera.position.z = 5;
 
     var controls = new THREE.TrackballControls(camera);
 
@@ -19,8 +18,7 @@ var Renderer = function() {
         antialias: true
     });
     renderer.setSize(width, height);
-    renderer.domElement.id = 'three';
-    document.body.appendChild( renderer.domElement );
+    el.appendChild( renderer.domElement );
 
     var scene = new THREE.Scene();
 
@@ -65,7 +63,7 @@ var Renderer = function() {
     function restoreControls() {
         var state = sessionStorage.getItem(projectId + 'threecontrols');
         state = JSON.parse(state);
-        //state = false;
+        // state = false;
         if (state) {
             controls.target0.copy(state.target);
             controls.position0.copy(state.position);

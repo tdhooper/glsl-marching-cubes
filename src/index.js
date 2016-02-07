@@ -3,8 +3,9 @@
 var CubeMarch = require("./cubemarch");
 var STLExporter = require("./stl-exporter");
 var Renderer = require("./renderer");
+var Ractive = require('ractive');
 
-var dd = 200;
+var dd = 50;
 var dims = [dd, dd, dd];
 var s = 1;
 var bounds = [
@@ -12,53 +13,63 @@ var bounds = [
     [s, s, s]
 ];
 
-var cubeMarch = new CubeMarch(dims, bounds);
-
-var doExport = true;
-
+var cubeMarch = new CubeMarch(dims, bounds, document.getElementById('background'));
 var exporter = new STLExporter();
-var renderer = new Renderer();
+var renderer = new Renderer(document.getElementById('scene'));
 
-if (doExport) {
+var fs = require('fs');
+var template = fs.readFileSync(__dirname + '/templates/ui.html', 'utf8');
+var ractive = new Ractive({
+    el: '#ui',
+    template: template
+});
 
-    var filename = [
-        'marched',
-        new Date().getTime(),
-        dims[0] + 'x' + dims[1] + 'x' + dims[2],
-    ].join('-');
-    exporter.startModel(filename);
 
-} else {
 
-    renderer.startModel();
+var updateProgress = function(cubesMarched, totalCubes) {
+    ractive.set('progress', ((cubesMarched / totalCubes) * 100).toFixed(2) + '% complete');
+};
 
-}
 
-var progressEl = document.getElementById('progress');
 
-var updateGeometry = function(data, cubesMarched, totalCubes) {
-
-    progressEl.innerHTML = ((cubesMarched / totalCubes) * 100).toFixed(2) + '% complete';
-
+var updateRender = function(data, cubesMarched, totalCubes) {
+    updateProgress(cubesMarched, totalCubes);
     if ( ! data) {
         return;
     }
-
-    if (doExport) {
-        exporter.addSection(data.vertices, data.faces);
-    } else {
-        renderer.addSection(data.vertices, data.faces);
-    }
+    renderer.addSection(data.vertices, data.faces);
 };
 
-var done = function() {
-    console.timeEnd('march');
-    if (doExport) {
-        exporter.finishModel();
-    }
+var render = function() {
+    renderer.startModel();
+    cubeMarch.march(updateRender, function() {});
 };
 
-console.time('march');
-cubeMarch.march(updateGeometry, done);
 
 
+var updateSave = function(data, cubesMarched, totalCubes) {
+    updateProgress(cubesMarched, totalCubes);
+    if ( ! data) {
+        return;
+    }
+    exporter.addSection(data.vertices, data.faces);
+};
+
+var saveDone = function() {
+    exporter.finishModel();
+};
+
+var save = function() {
+    var filename = [
+        'marched',
+        new Date().getTime(),
+        dims[0] + 'x' + dims[1] + 'x' + dims[2]
+    ].join('-');
+    exporter.startModel(filename);
+    cubeMarch.march(updateSave, saveDone);
+};
+
+
+
+ractive.on('start-render', render);
+ractive.on('start-save', save);

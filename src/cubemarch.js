@@ -8,10 +8,11 @@ var R = require('ramda');
 var unpackFloat = require("glsl-read-float");
 var splitVolume = require("./split-volume");
 
-var CubeMarch = function(dims, bounds) {
+var CubeMarch = function(dims, bounds, el) {
     var vertexCount = (dims[0] + 1) * (dims[1] + 1) * (dims[2] + 1);
     var size = Math.ceil(Math.sqrt(vertexCount));
     var scene = new Scene(size, size);
+    el && el.appendChild(scene.canvas);
     var maxSize = scene.gl.drawingBufferWidth;
     // maxSize = 100;
 
