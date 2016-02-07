@@ -24,6 +24,17 @@ STLExporter.prototype = {
         this.faces = new Float32Array(this.maxVerts);
     },
 
+    addSection: function(vertices, faces) {
+        var f, v1, v2, v3;
+        for (var i = 0; i < faces.length; ++i) {
+            f = faces[i];
+            v1 = vertices[ f[0] ];
+            v2 = vertices[ f[1] ];
+            v3 = vertices[ f[2] ];
+            this.addFace(v1, v2, v3);
+        }
+    },
+
     addFace: function(v1, v2, v3) {
         if (this.numVerts + 9 > this.maxVerts) {
             this.save();
