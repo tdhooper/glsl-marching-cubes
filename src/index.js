@@ -1,14 +1,14 @@
 "use strict";
 
 var CubeMarch = require("./cubemarch");
-var STLWriter = require("./stl-writer");
+var STLExporter = require("./stl-exporter");
 
 
 
 var debugMode = false;
 
 
-var dd = 300;
+var dd = 200;
 var dims = [dd, dd, dd];
 var s = 1;
 var bounds = [
@@ -80,111 +80,75 @@ if (debugMode) {
     var axisHelper = new THREE.AxisHelper( 1 );
     scene.add( axisHelper );
 
-    var stl = new STLWriter();
 
-    var vertIndex;
-    var numVerts;
-    var numFaces;
-    var maxVerts = 6000000;
-    var faces;
-    var part;
-    var timestamp;
-
-    var resetFull = function() {
-        reset();
-        part = 0;
-        timestamp = new Date().getTime();
-    }
-
-    var reset = function() {
-        vertIndex = -1;
-        numVerts = 0;
-        numFaces = 0;
-        faces = new Float32Array(maxVerts);
-    }
-
-    resetFull();
-
-    var norender = true;
+    var doExport = true;
     // var norender = false;
 
-    var save = function() {
+    var exporter = new STLExporter();
+
+    if (doExport) {
         var filename = [
             'marched',
-            timestamp,
+            new Date().getTime(),
             dims[0] + 'x' + dims[1] + 'x' + dims[2],
-            'part',
-            part
-        ].join('-') + '.stl';
-        stl.save(faces, numFaces, filename);
-        part += 1;
-        reset();
+        ].join('-');
+        exporter.startModel(filename);
     }
 
     var progressEl = document.getElementById('progress');
 
     var updateGeometry = function(data, cubesMarched, totalCubes) {
 
-        progressEl.innerHTML = ((cubesMarched / totalCubes) * 100).toFixed(2) + '% complete (' + numFaces + ' faces, ' + numVerts + 'vertices)';
+        progressEl.innerHTML = ((cubesMarched / totalCubes) * 100).toFixed(2) + '% complete';
 
         if ( ! data) {
             return;
         }
 
-        if ( ! norender) {
+        var f, v1, v2, v3;
+
+        if (doExport) {
+
+            for (var i = 0; i < data.faces.length; ++i) {
+                f = data.faces[i];
+                v1 = data.vertices[ f[0] ];
+                v2 = data.vertices[ f[1] ];
+                v3 = data.vertices[ f[2] ];
+                exporter.addFace(v1, v2, v3);
+            }
+
+        } else {
+
             var geometry = new THREE.BufferGeometry();
             var positions = new Float32Array( data.faces.length * 3 * 3 );
-        }
 
-        if (numVerts + data.faces.length * 9 > maxVerts) {
-            save();
-        }
+            for (var i = 0; i < data.faces.length; ++i) {
+                f = data.faces[i];
+                v1 = data.vertices[ f[0] ];
+                v2 = data.vertices[ f[1] ];
+                v3 = data.vertices[ f[2] ];
 
-        var f, v1, v2, v3, offset;
-        for (var i = 0; i < data.faces.length; ++i) {
-            f = data.faces[i];
-            v1 = data.vertices[ f[0] ];
-            v2 = data.vertices[ f[1] ];
-            v3 = data.vertices[ f[2] ];
-            faces[++vertIndex] = v1[0];
-            faces[++vertIndex] = v1[1];
-            faces[++vertIndex] = v1[2];
-            faces[++vertIndex] = v2[0];
-            faces[++vertIndex] = v2[1];
-            faces[++vertIndex] = v2[2];
-            faces[++vertIndex] = v3[0];
-            faces[++vertIndex] = v3[1];
-            faces[++vertIndex] = v3[2];
-            numVerts = vertIndex + 1;
-            numFaces = numVerts / 9;
-            if (norender) {
-                continue;
+                positions[ (i * 9) + 0 ] = v1[0];
+                positions[ (i * 9) + 1 ] = v1[1];
+                positions[ (i * 9) + 2 ] = v1[2];
+                positions[ (i * 9) + 3 ] = v2[0];
+                positions[ (i * 9) + 4 ] = v2[1];
+                positions[ (i * 9) + 5 ] = v2[2];
+                positions[ (i * 9) + 6 ] = v3[0];
+                positions[ (i * 9) + 7 ] = v3[1];
+                positions[ (i * 9) + 8 ] = v3[2];
             }
-            positions[ (i * 9) + 0 ] = v1[0];
-            positions[ (i * 9) + 1 ] = v1[1];
-            positions[ (i * 9) + 2 ] = v1[2];
-            positions[ (i * 9) + 3 ] = v2[0];
-            positions[ (i * 9) + 4 ] = v2[1];
-            positions[ (i * 9) + 5 ] = v2[2];
-            positions[ (i * 9) + 6 ] = v3[0];
-            positions[ (i * 9) + 7 ] = v3[1];
-            positions[ (i * 9) + 8 ] = v3[2];
-        }
 
-        if (norender) {
-            return;
+            var positionBuffer = new THREE.BufferAttribute( positions, 3 );
+            geometry.addAttribute( 'position', positionBuffer );
+            var obj = new THREE.Mesh(geometry, wireframeMaterial);
+            scene.add(obj);
         }
-
-        var positionBuffer = new THREE.BufferAttribute( positions, 3 );
-        geometry.addAttribute( 'position', positionBuffer );
-        var obj = new THREE.Mesh(geometry, wireframeMaterial);
-        scene.add(obj);
     };
 
     var done = function() {
         console.timeEnd('march');
-        save();
-        resetFull();
+        exporter.finishModel();
     };
 
     console.time('march');
