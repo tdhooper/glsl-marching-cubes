@@ -41,8 +41,12 @@ var updateRender = function(data, cubesMarched, totalCubes) {
 };
 
 var render = function() {
+    cubeMarch.abort();
     renderer.startModel();
-    cubeMarch.march(updateRender, function() {});
+    cubeMarch.march({
+        onSection: updateRender,
+        onProgress: updateProgress
+    });
 };
 
 
@@ -60,13 +64,18 @@ var saveDone = function() {
 };
 
 var save = function() {
+    cubeMarch.abort();
     var filename = [
         'marched',
         new Date().getTime(),
         dims[0] + 'x' + dims[1] + 'x' + dims[2]
     ].join('-');
     exporter.startModel(filename);
-    cubeMarch.march(updateSave, saveDone);
+    cubeMarch.march({
+        onSection: updateSave,
+        onProgress: updateProgress,
+        onDone: saveDone
+    });
 };
 
 

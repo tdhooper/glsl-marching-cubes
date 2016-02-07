@@ -11,14 +11,14 @@ var Renderer = function(el) {
     var camera = new THREE.PerspectiveCamera(45, width / height, 0.001, 1000);
     camera.position.z = 5;
 
-    var controls = new THREE.TrackballControls(camera);
-
     var renderer = new THREE.WebGLRenderer({
         alpha: true,
         antialias: true
     });
     renderer.setSize(width, height);
     el.appendChild( renderer.domElement );
+
+    var controls = new THREE.TrackballControls(camera, renderer.domElement);
 
     var scene = new THREE.Scene();
 

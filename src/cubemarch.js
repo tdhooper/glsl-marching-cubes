@@ -33,20 +33,23 @@ var CubeMarch = function(dims, bounds, el) {
     this.scene = scene;
     this.gl = scene.gl;
     this.startTime = new Date().getTime();
+
+    this.numWorkers = 1;
+    this.workerPool = new WorkerPool('build/workers/march.js', this.numWorkers);
 };
 
 CubeMarch.prototype.sizeBuckets = function(pixels, maxSize) {
     return Math.ceil(pixels / Math.max(pixels / maxSize));
 };
 
-CubeMarch.prototype.calcPotentials = function(volumeIndex, pixels, uniforms, workers) {
+CubeMarch.prototype.calcPotentials = function(volumeIndex, pixels, uniforms) {
     var volume = this.volumes[volumeIndex];
     var potentialsBuffer;
     var potentials;
     var blockPotentialBuffers = [];
     var blockPotentials = [];
 
-    for (var i = 0; i < workers; i++) {
+    for (var i = 0; i < this.numWorkers; i++) {
         potentialsBuffer = new ArrayBuffer(volume.vertexCount * 4);
         potentials = new Float32Array(potentialsBuffer);
         blockPotentialBuffers.push(potentialsBuffer);
@@ -81,7 +84,7 @@ CubeMarch.prototype.calcPotentials = function(volumeIndex, pixels, uniforms, wor
         b = pixels[i * 4 + 2];
         a = pixels[i * 4 + 3];
         value = unpackFloat(r, g, b, a);
-        for (bl = 0; bl < workers; bl++) {
+        for (bl = 0; bl < this.numWorkers; bl++) {
             blockPotentials[bl][i] = value;
         }
     }
@@ -89,20 +92,18 @@ CubeMarch.prototype.calcPotentials = function(volumeIndex, pixels, uniforms, wor
     return blockPotentialBuffers;
 }
 
-CubeMarch.prototype.marchVolume = function(volumeIndex, blockPotentialBuffers, updateGeometry, done) {
-    var volume = this.volumes[volumeIndex];
-    var workers = blockPotentialBuffers.length;
+CubeMarch.prototype.marchVolume = function(config) {
+    var volume = this.volumes[config.volumeIndex];
     var initialSpecs = [];
     var marchSpecs = [];
 
-    for (var i = 0; i < workers; i++) {
+    for (var i = 0; i < this.numWorkers; i++) {
         initialSpecs.push({
-            transferable: blockPotentialBuffers[i]
+            transferable: config.blockPotentialBuffers[i]
         });
     }
 
-    var workerPool = new WorkerPool('build/workers/march.js', workers);
-    workerPool.each(initialSpecs);
+    this.workerPool.each('init', initialSpecs);
 
     var blocks = 256;
     var start;
@@ -124,18 +125,21 @@ CubeMarch.prototype.marchVolume = function(volumeIndex, blockPotentialBuffers, u
     var update = function(data, configIndex) {
         var spec = marchSpecs[configIndex].json;
         this.cubesMarched += spec.end - spec.start;
-        updateGeometry(data, this.cubesMarched, this.totalCubes);
+        config.onSection(data);
+        config.onProgress(this.cubesMarched, this.totalCubes);
     };
 
-    workerPool.each(marchSpecs, update.bind(this), done);
-}
+    this.workerPool.each('march', marchSpecs, update.bind(this), config.onDone);
+};
 
-CubeMarch.prototype.march = function(updateGeometry, done, debug) {
+CubeMarch.prototype.abort = function() {
+    this.workerPool.abort();
+};
+
+CubeMarch.prototype.march = function(config) {
 
     this.cubesMarched = 0;
     var gl = this.gl;
-
-    var workers = 4;
 
     var uniforms = {
         time: new Date().getTime() - this.startTime
@@ -149,12 +153,19 @@ CubeMarch.prototype.march = function(updateGeometry, done, debug) {
 
     var nextVolume = function() {
         if (volumeIndex >= this.volumes.length) {
-            done();
+            config.hasOwnProperty('onDone') && config.onDone();
             return;
         }
 
-        blockPotentialBuffers = this.calcPotentials(volumeIndex, pixels, uniforms, workers);
-        this.marchVolume(volumeIndex, blockPotentialBuffers, updateGeometry, nextVolume.bind(this));
+        blockPotentialBuffers = this.calcPotentials(volumeIndex, pixels, uniforms);
+
+        this.marchVolume({
+            volumeIndex: volumeIndex,
+            blockPotentialBuffers: blockPotentialBuffers,
+            onSection: config.onSection,
+            onProgress: config.onProgress,
+            onDone: nextVolume.bind(this)
+        });
 
         volumeIndex += 1;
     };
