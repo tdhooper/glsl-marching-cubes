@@ -80,18 +80,52 @@ if (debugMode) {
     var axisHelper = new THREE.AxisHelper( 1 );
     scene.add( axisHelper );
 
-    var facesIndex = -1;
-    var numFaces = 0;
-    var faces = new Float32Array(60000000);
+    var stl = new STLWriter();
+
+    var vertIndex;
+    var numVerts;
+    var numFaces;
+    var maxVerts = 6000000;
+    var faces;
+    var part;
+    var timestamp;
+
+    var resetFull = function() {
+        reset();
+        part = 0;
+        timestamp = new Date().getTime();
+    }
+
+    var reset = function() {
+        vertIndex = -1;
+        numVerts = 0;
+        numFaces = 0;
+        faces = new Float32Array(maxVerts);
+    }
+
+    resetFull();
 
     var norender = true;
     // var norender = false;
+
+    var save = function() {
+        var filename = [
+            'marched',
+            timestamp,
+            dims[0] + 'x' + dims[1] + 'x' + dims[2],
+            'part',
+            part
+        ].join('-') + '.stl';
+        stl.save(faces, numFaces, filename);
+        part += 1;
+        reset();
+    }
 
     var progressEl = document.getElementById('progress');
 
     var updateGeometry = function(data, cubesMarched, totalCubes) {
 
-        progressEl.innerHTML = ((cubesMarched / totalCubes) * 100).toFixed(2) + '% complete (' + numFaces + ' faces, ' + facesIndex + 1 + 'vertices)';
+        progressEl.innerHTML = ((cubesMarched / totalCubes) * 100).toFixed(2) + '% complete (' + numFaces + ' faces, ' + numVerts + 'vertices)';
 
         if ( ! data) {
             return;
@@ -102,22 +136,27 @@ if (debugMode) {
             var positions = new Float32Array( data.faces.length * 3 * 3 );
         }
 
+        if (numVerts + data.faces.length * 9 > maxVerts) {
+            save();
+        }
+
         var f, v1, v2, v3, offset;
         for (var i = 0; i < data.faces.length; ++i) {
             f = data.faces[i];
             v1 = data.vertices[ f[0] ];
             v2 = data.vertices[ f[1] ];
             v3 = data.vertices[ f[2] ];
-            faces[++facesIndex] = v1[0];
-            faces[++facesIndex] = v1[1];
-            faces[++facesIndex] = v1[2];
-            faces[++facesIndex] = v2[0];
-            faces[++facesIndex] = v2[1];
-            faces[++facesIndex] = v2[2];
-            faces[++facesIndex] = v3[0];
-            faces[++facesIndex] = v3[1];
-            faces[++facesIndex] = v3[2];
-            numFaces = (facesIndex + 1) / 9;
+            faces[++vertIndex] = v1[0];
+            faces[++vertIndex] = v1[1];
+            faces[++vertIndex] = v1[2];
+            faces[++vertIndex] = v2[0];
+            faces[++vertIndex] = v2[1];
+            faces[++vertIndex] = v2[2];
+            faces[++vertIndex] = v3[0];
+            faces[++vertIndex] = v3[1];
+            faces[++vertIndex] = v3[2];
+            numVerts = vertIndex + 1;
+            numFaces = numVerts / 9;
             if (norender) {
                 continue;
             }
@@ -144,8 +183,8 @@ if (debugMode) {
 
     var done = function() {
         console.timeEnd('march');
-        var stl = new STLWriter();
-        stl.save(faces, numFaces, 'marched.stl');
+        save();
+        resetFull();
     };
 
     console.time('march');
