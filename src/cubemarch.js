@@ -8,11 +8,26 @@ var R = require('ramda');
 var unpackFloat = require("glsl-read-float");
 var splitVolume = require("./split-volume");
 
-var CubeMarch = function(dims, bounds, el) {
+var CubeMarch = function(el) {
+    this.scene = new Scene(1, 1);
+    el && el.appendChild(this.scene.canvas);
+
+    this.potentialsProg = this.scene.createProgramInfo(
+        glslify('./shaders/shader.vert'),
+        glslify('./shaders/calc-potentials.frag')
+    );
+
+    this.startTime = new Date().getTime();
+    this.numWorkers = 4;
+    this.workerPool = new WorkerPool('build/workers/march.js', this.numWorkers);
+};
+
+CubeMarch.prototype.setVolume = function(dims, bounds) {
+    var scene = this.scene;
+
     var vertexCount = (dims[0] + 1) * (dims[1] + 1) * (dims[2] + 1);
     var size = Math.ceil(Math.sqrt(vertexCount));
-    var scene = new Scene(size, size);
-    el && el.appendChild(scene.canvas);
+    scene.resize(size, size);
     var maxSize = scene.gl.drawingBufferWidth;
     // maxSize = 100;
 
@@ -24,19 +39,8 @@ var CubeMarch = function(dims, bounds, el) {
     }, 0);
     scene.resize(newSize, newSize);
 
-    this.potentialsProg = scene.createProgramInfo(
-        glslify('./shaders/shader.vert'),
-        glslify('./shaders/calc-potentials.frag')
-    );
-
     this.totalCubes = dims[0] * dims[1] * dims[2];
-    this.scene = scene;
-    this.gl = scene.gl;
-    this.startTime = new Date().getTime();
-
-    this.numWorkers = 1;
-    this.workerPool = new WorkerPool('build/workers/march.js', this.numWorkers);
-};
+}
 
 CubeMarch.prototype.sizeBuckets = function(pixels, maxSize) {
     return Math.ceil(pixels / Math.max(pixels / maxSize));
@@ -60,7 +64,7 @@ CubeMarch.prototype.calcPotentials = function(volumeIndex, pixels, uniforms) {
     var value;
     var i;
     var bl;
-    var gl = this.gl;
+    var gl = this.scene.gl;
 
     uniforms.boundsA = volume.bounds[0];
     uniforms.boundsB = volume.bounds[1];
@@ -73,7 +77,7 @@ CubeMarch.prototype.calcPotentials = function(volumeIndex, pixels, uniforms) {
 
     gl.readPixels(
         0, 0,
-        this.gl.drawingBufferWidth, this.gl.drawingBufferHeight,
+        gl.drawingBufferWidth, gl.drawingBufferHeight,
         gl.RGBA, gl.UNSIGNED_BYTE,
         pixels
     );
@@ -139,7 +143,7 @@ CubeMarch.prototype.abort = function() {
 CubeMarch.prototype.march = function(config) {
 
     this.cubesMarched = 0;
-    var gl = this.gl;
+    var gl = this.scene.gl;
 
     var uniforms = {
         time: new Date().getTime() - this.startTime

@@ -1,5 +1,66 @@
-<p class="progress">{{ progress }}</p>
+<div class="controls">
 
-<button class="btn" on-click="start-render">Render</button>
-<button class="btn" on-click="start-save">Save</button>
-<button class="btn" on-click="cancel">Cancel</button>
+    <fieldset
+        class="
+            control-section
+            {{#if preview.disable }}
+                control-section--disabled
+            {{/if}}
+        "
+    >
+        <h3 class="control-heading">Preview</h3>
+        <label class="control-label" for="preview-resolution">Resolution</label>
+        <input
+            class="control-input"
+            id="preview-resolution"
+            type="number"
+            value="{{ preview.resolution }}"
+            {{#if preview.disable }}
+                disabled
+            {{/if}}
+        >
+        <button
+            class="btn"
+            on-click="preview.start"
+            {{#if preview.disable }}
+                disabled
+            {{/if}}
+        >Render</button>
+        {{#if preview.showCancel }}
+            <button class="btn" on-click="preview.cancel">Cancel</button>
+        {{/if}}
+    </fieldset>
+
+    <fieldset
+        class="
+            control-section
+            {{#if download.disable }}
+                control-section--disabled
+            {{/if}}
+        "
+    >
+        <h3 class="control-heading">Download</h3>
+        <label class="control-label" for="preview-resolution">Resolution</label>
+        <input
+            class="control-input"
+            id="preview-resolution"
+            type="number"
+            value="{{ download.resolution }}"
+            {{#if download.disable }}
+                disabled
+            {{/if}}
+        >
+        <button
+            class="btn"
+            on-click="download.start"
+            {{#if download.disable }}
+                disabled
+            {{/if}}
+        >Generate</button>
+        {{#if download.showCancel }}
+            <button class="btn" on-click="download.cancel">Cancel</button>
+        {{/if}}
+    </fieldset>
+
+    <p class="progress">{{ progress }}</p>
+</div>

@@ -1,0 +1,89 @@
+@import "normalize.css";
+
+body {
+    margin: 0;
+    height: 100%;
+    background: #111;
+}
+
+#background,
+#scene,
+#ui {
+    margin-top: 0;
+}
+
+#background canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+#scene canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100% !important;
+    width: 100% !important;
+    display: block;
+}
+
+.btn {
+    margin-top: 1em;
+}
+
+.controls {
+    background: black;
+    position: fixed;
+    right: 0;
+    top: 0;
+    color: white;
+    width: 250px;
+    padding: 1em;
+}
+
+.progress {
+    margin: 0;
+    padding: 20px;
+}
+
+.control-section {
+    border: none;
+    padding: 0;
+    margin: 0;
+
+    border-top: 5px solid #333;
+    padding-top: 1em;
+    margin-top: 1em;
+}
+
+.control-section--disabled {
+    color: #666;
+}
+
+.control-heading {
+    margin: 0;
+}
+
+.control-label,
+.control-input {
+    display: inline-block;
+    margin-top: 1em;
+}
+
+.control-input {
+    width: 100px;
+    margin-left: 5px;
+}
+
+input,
+button {
+    background: #333;
+    border: none;
+    padding: 10px;
+}
+
+input[disabled],
+button[disabled] {
+    background: #222;
+    color: #666;
+}
