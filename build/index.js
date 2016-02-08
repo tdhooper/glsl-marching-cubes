@@ -69016,11 +69016,26 @@ var R = require('ramda');
 var unpackFloat = require("glsl-read-float");
 var splitVolume = require("./split-volume");
 
-var CubeMarch = function(dims, bounds, el) {
+var CubeMarch = function(el) {
+    this.scene = new Scene(1, 1);
+    el && el.appendChild(this.scene.canvas);
+
+    this.potentialsProg = this.scene.createProgramInfo(
+        "#define GLSLIFY 1\nattribute vec3 position;\n\nvoid main() {\n    gl_Position = vec4(position, 1.0);\n}\n",
+        "#define GLSLIFY 1\nprecision mediump float;\n\nint coordToIndex(vec2 coord, vec2 size) {\n    return int(\n        floor(coord.x) + (floor(coord.y) * size.x)\n    );\n}\n\n#define FLOAT_MAX  1.70141184e38\n#define FLOAT_MIN  1.17549435e-38\n\nlowp vec4 encode_float_1117569599(highp float v) {\n  highp float av = abs(v);\n\n  //Handle special cases\n  if(av < FLOAT_MIN) {\n    return vec4(0.0, 0.0, 0.0, 0.0);\n  } else if(v > FLOAT_MAX) {\n    return vec4(127.0, 128.0, 0.0, 0.0) / 255.0;\n  } else if(v < -FLOAT_MAX) {\n    return vec4(255.0, 128.0, 0.0, 0.0) / 255.0;\n  }\n\n  highp vec4 c = vec4(0,0,0,0);\n\n  //Compute exponent and mantissa\n  highp float e = floor(log2(av));\n  highp float m = av * pow(2.0, -e) - 1.0;\n  \n  //Unpack mantissa\n  c[1] = floor(128.0 * m);\n  m -= c[1] / 128.0;\n  c[2] = floor(32768.0 * m);\n  m -= c[2] / 32768.0;\n  c[3] = floor(8388608.0 * m);\n  \n  //Unpack exponent\n  highp float ebias = e + 127.0;\n  c[0] = floor(ebias / 2.0);\n  ebias -= c[0] * 2.0;\n  c[1] += floor(ebias) * 128.0; \n\n  //Unpack sign bit\n  c[0] += 128.0 * step(0.0, -v);\n\n  //Scale back to range\n  return c / 255.0;\n}\n\n#define PHI (sqrt(5.)*0.5 + 0.5)\n#define PI 3.14159265\n\nfloat fOpIntersectionRound(float a, float b, float r) {\n    float m = max(a, b);\n    if ((-a < r) && (-b < r)) {\n        return max(m, -(r - sqrt((r+a)*(r+a) + (r+b)*(r+b))));\n    } else {\n        return m;\n    }\n}\n\n// Cone with correct distances to tip and base circle. Y is up, 0 is in the middle of the base.\nfloat fCone(vec3 p, float radius, float height) {\n    vec2 q = vec2(length(p.xz), p.y);\n    vec2 tip = q - vec2(0, height);\n    vec2 mantleDir = normalize(vec2(height, radius));\n    float mantle = dot(tip, mantleDir);\n    float d = max(mantle, -q.y);\n    float projected = dot(tip, vec2(mantleDir.y, -mantleDir.x));\n    \n    // distance to tip\n    if ((q.y > height) && (projected < 0.)) {\n        d = max(d, length(tip));\n    }\n    \n    // distance to base ring\n    if ((q.x > radius) && (projected > length(vec2(height, radius)))) {\n        d = max(d, length(q - vec2(radius, 0)));\n    }\n    return d;\n}\n\n// Reflect space at a plane\nfloat pReflect(inout vec3 p, vec3 planeNormal, float offset) {\n    float t = dot(p, planeNormal)+offset;\n    if (t < 0.) {\n        p = p - (2.*t)*planeNormal;\n    }\n    return sign(t);\n}\n\n// Rotate around a coordinate axis (i.e. in a plane perpendicular to that axis) by angle <a>.\n// Read like this: R(p.xz, a) rotates \"x towards z\".\n// This is fast if <a> is a compile-time constant and slower (but still practical) if not.\nvoid pR(inout vec2 p, float a) {\n    p = cos(a)*p + sin(a)*vec2(p.y, -p.x);\n}\n\n// The \"Round\" variant uses a quarter-circle to join the two objects smoothly:\nfloat fOpUnionRound(float a, float b, float r) {\n    float m = min(a, b);\n    if ((a < r) && (b < r) ) {\n        return min(m, r - sqrt((r-a)*(r-a) + (r-b)*(r-b)));\n    } else {\n     return m;\n    }\n}\n\n// Repeat around the origin by a fixed angle.\n// For easier use, num of repetitions is use to specify the angle.\nfloat pModPolar(inout vec2 p, float repetitions) {\n    float angle = 2.*PI/repetitions;\n    float a = atan(p.y, p.x) + angle/2.;\n    float r = length(p);\n    float c = floor(a/angle);\n    a = mod(a,angle) - angle/2.;\n    p = vec2(cos(a), sin(a))*r;\n    // For an odd number of repetitions, fix cell index of the cell in -x direction\n    // (cell index would be e.g. -5 and 5 in the two halves of the cell):\n    if (abs(c) >= (repetitions/2.)) c = abs(c);\n    return c;\n}\n\nvec3 pModDodecahedron(inout vec3 p) {\n    vec3 v1 = normalize(vec3(0., PHI, 1.));\n    vec3 v2 = normalize(vec3(PHI, 1., 0.));\n\n    float sides = 5.;\n    float dihedral = acos(dot(v1, v2));\n    float halfDdihedral = dihedral / 2.;\n    float faceAngle = 2. * PI / sides;\n    \n    p.z = abs(p.z);\n    \n    pR(p.xz, -halfDdihedral);\n    pR(p.xy, faceAngle / 4.);\n    \n    p.x = -abs(p.x);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    p.z = -p.z;\n    pModPolar(p.yx, sides);\n    pReflect(p, vec3(-1, 0, 0), 0.);\n    \n    return p;\n}\n\nvec3 pModIcosahedron(inout vec3 p) {\n\n    vec3 v1 = normalize(vec3(1, 1, 1 ));\n    vec3 v2 = normalize(vec3(0, 1, PHI+1.));\n\n    float sides = 3.;\n    float dihedral = acos(dot(v1, v2));\n    float halfDdihedral = dihedral / 2.;\n    float faceAngle = 2. * PI / sides;\n    \n\n    p.z = abs(p.z);    \n    pR(p.yz, halfDdihedral);\n    \n    p.x = -abs(p.x);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n     \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n  \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    p.z = -p.z;\n    pModPolar(p.yx, sides);\n    pReflect(p, vec3(-1, 0, 0), 0.);\n\n    return p;\n}\n\nfloat spikeModel(vec3 p) {\n    pR(p.zy, PI/2.);\n    return fCone(p, 0.25, 3.);\n}\n\nfloat spikesModel(vec3 p) {\n    float smooth = 0.6;\n    \n    pModDodecahedron(p);\n    \n    vec3 v1 = normalize(vec3(0., PHI, 1.));\n    vec3 v2 = normalize(vec3(PHI, 1., 0.));\n\n    float sides = 5.;\n    float dihedral = acos(dot(v1, v2));\n    float halfDdihedral = dihedral / 2.;\n    float faceAngle = 2. * PI / sides;\n    \n    float spikeA = spikeModel(p);\n    \n    pR(p.zy, -dihedral);\n\n    float spikeB = spikeModel(p);\n\n    pR(p.xy, -faceAngle);\n    pR(p.zy, dihedral);\n    \n    float spikeC = spikeModel(p);\n    \n    return fOpUnionRound(\n        spikeC,\n        fOpUnionRound(\n            spikeA,\n            spikeB,\n            smooth\n        ),\n        smooth\n    );\n}\n\nfloat coreModel(vec3 p) {\n    float outer = length(p) - .9;\n    float spikes = spikesModel(p);\n    outer = fOpUnionRound(outer, spikes, 0.4);\n    return outer;\n}\n\nfloat exoSpikeModel(vec3 p) {\n    pR(p.zy, PI/2.);\n    p.y -= 1.;\n    return fCone(p, 0.5, 1.);\n}\n\nfloat exoSpikesModel(vec3 p) {\n    pModIcosahedron(p);\n\n    vec3 v1 = normalize(vec3(1, 1, 1 ));\n    vec3 v2 = normalize(vec3(0, 1, PHI+1.));\n\n    float dihedral = acos(dot(v1, v2));\n\n    float spikeA = exoSpikeModel(p);\n    \n    pR(p.zy, -dihedral);\n\n    float spikeB = exoSpikeModel(p);\n\n    return fOpUnionRound(spikeA, spikeB, 0.5);\n}\n\nfloat exoHolesModel(vec3 p) {\n    float len = 3.;\n    pModDodecahedron(p);\n    p.z += 1.5;\n    return length(p) - .65;\n}\n\nfloat exoModel(vec3 p) {    \n    float thickness = 0.18;\n    float outer = length(p) - 1.5;\n    float inner = outer + thickness;\n\n    float spikes = exoSpikesModel(p);\n    outer = fOpUnionRound(outer, spikes, 0.3);\n    \n    float shell = max(-inner, outer);\n\n    float holes = exoHolesModel(p);\n    shell = fOpIntersectionRound(-holes, shell, thickness/2.);\n    \n    return shell;\n}\n\nfloat doExo(vec3 p) {\n    //return length(p + vec3(0,0,-2)) - 3.;\n    //float disp = (sin(length(p) * 5. - t * 8.)) * 0.03;\n    return exoModel(p);\n}\n\nfloat doCore(vec3 p) {\n    //return length(p + vec3(0,0,2)) - 3.;\n    return coreModel(p);\n}\n\n// checks to see which intersection is closer\n// and makes the y of the vec2 be the proper id\nvec2 opU( vec2 d1, vec2 d2 ){\n    \n    return (d1.x<d2.x) ? d1 : d2;\n    \n}\n\n//--------------------------------\n// Modelling \n//--------------------------------\nfloat map( vec3 p ){  \n    p *= 3.;\n    vec2 res = vec2(doExo(p) ,1.); \n    res = opU(res, vec2(doCore(p) ,2.));\n    \n    return res.x;\n}\n\nuniform vec2 resolution;\n\nuniform vec3 boundsA;\nuniform vec3 boundsB;\nuniform vec3 dims;\nuniform float time;\n\nvec3 vertDims = dims + vec3(1);\nvec3 scale = (boundsB - boundsA) / dims;\nvec3 shift = boundsA;\n\n// float map(vec3 p) {\n//     return length(p) - .5 + sin(time / 1000.) * .2;\n// }\n\n// void pR(inout vec2 p, float a) {\n//     p = cos(a)*p + sin(a)*vec2(p.y, -p.x);\n// }\n\n// float vmax(vec3 v) {\n//     return max(max(v.x, v.y), v.z);\n// }\n\n// // Box: correct distance to corners\n// float fBox(vec3 p, vec3 b) {\n//     vec3 d = abs(p) - b;\n//     return length(max(d, vec3(0))) + vmax(min(d, vec3(0)));\n// }\n\n// float map(vec3 p) {\n//     // return length(p) - .5 + sin(time / 1000.) * .2;\n//     // return length(p) - .9;\n//     pR(p.xy, .5);\n//     pR(p.zx, .2);\n//     return fBox(p, vec3(.5));\n// }\n\nvec3 vertFromIndex(float index) {\n    vec3 vert = vec3(0);\n    vert.x = mod(index, vertDims.x);\n    vert.y = mod(floor(index / vertDims.x), vertDims.y);\n    vert.z = mod(floor(index / (vertDims.y * vertDims.x)), vertDims.z);\n    return scale * vert + shift; \n}\n\nvoid main() {\n\n    float vertIndex = float(coordToIndex(gl_FragCoord.xy, resolution.xy));\n\n    if (vertIndex >= vertDims.x * vertDims.y * vertDims.z) {\n        gl_FragColor = vec4(1);\n        return;\n    }\n\n    vec3 vert = vertFromIndex(vertIndex);\n    float potential = map(vert);\n    gl_FragColor = encode_float_1117569599(potential);\n}\n"
+    );
+
+    this.startTime = new Date().getTime();
+    this.numWorkers = 4;
+    this.workerPool = new WorkerPool('build/workers/march.js', this.numWorkers);
+};
+
+CubeMarch.prototype.setVolume = function(dims, bounds) {
+    var scene = this.scene;
+
     var vertexCount = (dims[0] + 1) * (dims[1] + 1) * (dims[2] + 1);
     var size = Math.ceil(Math.sqrt(vertexCount));
-    var scene = new Scene(size, size);
-    el && el.appendChild(scene.canvas);
+    scene.resize(size, size);
     var maxSize = scene.gl.drawingBufferWidth;
     // maxSize = 100;
 
@@ -69032,19 +69047,8 @@ var CubeMarch = function(dims, bounds, el) {
     }, 0);
     scene.resize(newSize, newSize);
 
-    this.potentialsProg = scene.createProgramInfo(
-        "#define GLSLIFY 1\nattribute vec3 position;\n\nvoid main() {\n    gl_Position = vec4(position, 1.0);\n}\n",
-        "#define GLSLIFY 1\nprecision mediump float;\n\nint coordToIndex(vec2 coord, vec2 size) {\n    return int(\n        floor(coord.x) + (floor(coord.y) * size.x)\n    );\n}\n\n#define FLOAT_MAX  1.70141184e38\n#define FLOAT_MIN  1.17549435e-38\n\nlowp vec4 encode_float_1117569599(highp float v) {\n  highp float av = abs(v);\n\n  //Handle special cases\n  if(av < FLOAT_MIN) {\n    return vec4(0.0, 0.0, 0.0, 0.0);\n  } else if(v > FLOAT_MAX) {\n    return vec4(127.0, 128.0, 0.0, 0.0) / 255.0;\n  } else if(v < -FLOAT_MAX) {\n    return vec4(255.0, 128.0, 0.0, 0.0) / 255.0;\n  }\n\n  highp vec4 c = vec4(0,0,0,0);\n\n  //Compute exponent and mantissa\n  highp float e = floor(log2(av));\n  highp float m = av * pow(2.0, -e) - 1.0;\n  \n  //Unpack mantissa\n  c[1] = floor(128.0 * m);\n  m -= c[1] / 128.0;\n  c[2] = floor(32768.0 * m);\n  m -= c[2] / 32768.0;\n  c[3] = floor(8388608.0 * m);\n  \n  //Unpack exponent\n  highp float ebias = e + 127.0;\n  c[0] = floor(ebias / 2.0);\n  ebias -= c[0] * 2.0;\n  c[1] += floor(ebias) * 128.0; \n\n  //Unpack sign bit\n  c[0] += 128.0 * step(0.0, -v);\n\n  //Scale back to range\n  return c / 255.0;\n}\n\n#define PHI (sqrt(5.)*0.5 + 0.5)\n#define PI 3.14159265\n\nfloat fOpIntersectionRound(float a, float b, float r) {\n    float m = max(a, b);\n    if ((-a < r) && (-b < r)) {\n        return max(m, -(r - sqrt((r+a)*(r+a) + (r+b)*(r+b))));\n    } else {\n        return m;\n    }\n}\n\n// Cone with correct distances to tip and base circle. Y is up, 0 is in the middle of the base.\nfloat fCone(vec3 p, float radius, float height) {\n    vec2 q = vec2(length(p.xz), p.y);\n    vec2 tip = q - vec2(0, height);\n    vec2 mantleDir = normalize(vec2(height, radius));\n    float mantle = dot(tip, mantleDir);\n    float d = max(mantle, -q.y);\n    float projected = dot(tip, vec2(mantleDir.y, -mantleDir.x));\n    \n    // distance to tip\n    if ((q.y > height) && (projected < 0.)) {\n        d = max(d, length(tip));\n    }\n    \n    // distance to base ring\n    if ((q.x > radius) && (projected > length(vec2(height, radius)))) {\n        d = max(d, length(q - vec2(radius, 0)));\n    }\n    return d;\n}\n\n// Reflect space at a plane\nfloat pReflect(inout vec3 p, vec3 planeNormal, float offset) {\n    float t = dot(p, planeNormal)+offset;\n    if (t < 0.) {\n        p = p - (2.*t)*planeNormal;\n    }\n    return sign(t);\n}\n\n// Rotate around a coordinate axis (i.e. in a plane perpendicular to that axis) by angle <a>.\n// Read like this: R(p.xz, a) rotates \"x towards z\".\n// This is fast if <a> is a compile-time constant and slower (but still practical) if not.\nvoid pR(inout vec2 p, float a) {\n    p = cos(a)*p + sin(a)*vec2(p.y, -p.x);\n}\n\n// The \"Round\" variant uses a quarter-circle to join the two objects smoothly:\nfloat fOpUnionRound(float a, float b, float r) {\n    float m = min(a, b);\n    if ((a < r) && (b < r) ) {\n        return min(m, r - sqrt((r-a)*(r-a) + (r-b)*(r-b)));\n    } else {\n     return m;\n    }\n}\n\n// Repeat around the origin by a fixed angle.\n// For easier use, num of repetitions is use to specify the angle.\nfloat pModPolar(inout vec2 p, float repetitions) {\n    float angle = 2.*PI/repetitions;\n    float a = atan(p.y, p.x) + angle/2.;\n    float r = length(p);\n    float c = floor(a/angle);\n    a = mod(a,angle) - angle/2.;\n    p = vec2(cos(a), sin(a))*r;\n    // For an odd number of repetitions, fix cell index of the cell in -x direction\n    // (cell index would be e.g. -5 and 5 in the two halves of the cell):\n    if (abs(c) >= (repetitions/2.)) c = abs(c);\n    return c;\n}\n\nvec3 pModDodecahedron(inout vec3 p) {\n    vec3 v1 = normalize(vec3(0., PHI, 1.));\n    vec3 v2 = normalize(vec3(PHI, 1., 0.));\n\n    float sides = 5.;\n    float dihedral = acos(dot(v1, v2));\n    float halfDdihedral = dihedral / 2.;\n    float faceAngle = 2. * PI / sides;\n    \n    p.z = abs(p.z);\n    \n    pR(p.xz, -halfDdihedral);\n    pR(p.xy, faceAngle / 4.);\n    \n    p.x = -abs(p.x);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    p.z = -p.z;\n    pModPolar(p.yx, sides);\n    pReflect(p, vec3(-1, 0, 0), 0.);\n    \n    return p;\n}\n\nvec3 pModIcosahedron(inout vec3 p) {\n\n    vec3 v1 = normalize(vec3(1, 1, 1 ));\n    vec3 v2 = normalize(vec3(0, 1, PHI+1.));\n\n    float sides = 3.;\n    float dihedral = acos(dot(v1, v2));\n    float halfDdihedral = dihedral / 2.;\n    float faceAngle = 2. * PI / sides;\n    \n\n    p.z = abs(p.z);    \n    pR(p.yz, halfDdihedral);\n    \n    p.x = -abs(p.x);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n     \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n  \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    p.z = -p.z;\n    pModPolar(p.yx, sides);\n    pReflect(p, vec3(-1, 0, 0), 0.);\n\n    return p;\n}\n\nfloat spikeModel(vec3 p) {\n    pR(p.zy, PI/2.);\n    return fCone(p, 0.25, 3.);\n}\n\nfloat spikesModel(vec3 p) {\n    float smooth = 0.6;\n    \n    pModDodecahedron(p);\n    \n    vec3 v1 = normalize(vec3(0., PHI, 1.));\n    vec3 v2 = normalize(vec3(PHI, 1., 0.));\n\n    float sides = 5.;\n    float dihedral = acos(dot(v1, v2));\n    float halfDdihedral = dihedral / 2.;\n    float faceAngle = 2. * PI / sides;\n    \n    float spikeA = spikeModel(p);\n    \n    pR(p.zy, -dihedral);\n\n    float spikeB = spikeModel(p);\n\n    pR(p.xy, -faceAngle);\n    pR(p.zy, dihedral);\n    \n    float spikeC = spikeModel(p);\n    \n    return fOpUnionRound(\n        spikeC,\n        fOpUnionRound(\n            spikeA,\n            spikeB,\n            smooth\n        ),\n        smooth\n    );\n}\n\nfloat coreModel(vec3 p) {\n    float outer = length(p) - .9;\n    float spikes = spikesModel(p);\n    outer = fOpUnionRound(outer, spikes, 0.4);\n    return outer;\n}\n\nfloat exoSpikeModel(vec3 p) {\n    pR(p.zy, PI/2.);\n    p.y -= 1.;\n    return fCone(p, 0.5, 1.);\n}\n\nfloat exoSpikesModel(vec3 p) {\n    pModIcosahedron(p);\n\n    vec3 v1 = normalize(vec3(1, 1, 1 ));\n    vec3 v2 = normalize(vec3(0, 1, PHI+1.));\n\n    float dihedral = acos(dot(v1, v2));\n\n    float spikeA = exoSpikeModel(p);\n    \n    pR(p.zy, -dihedral);\n\n    float spikeB = exoSpikeModel(p);\n\n    return fOpUnionRound(spikeA, spikeB, 0.5);\n}\n\nfloat exoHolesModel(vec3 p) {\n    float len = 3.;\n    pModDodecahedron(p);\n    p.z += 1.5;\n    return length(p) - .65;\n}\n\nfloat exoModel(vec3 p) {    \n    float thickness = 0.18;\n    float outer = length(p) - 1.5;\n    float inner = outer + thickness;\n\n    float spikes = exoSpikesModel(p);\n    outer = fOpUnionRound(outer, spikes, 0.3);\n    \n    float shell = max(-inner, outer);\n\n    float holes = exoHolesModel(p);\n    shell = fOpIntersectionRound(-holes, shell, thickness/2.);\n    \n    return shell;\n}\n\nfloat doExo(vec3 p) {\n    //return length(p + vec3(0,0,-2)) - 3.;\n    //float disp = (sin(length(p) * 5. - t * 8.)) * 0.03;\n    return exoModel(p);\n}\n\nfloat doCore(vec3 p) {\n    //return length(p + vec3(0,0,2)) - 3.;\n    return coreModel(p);\n}\n\n// checks to see which intersection is closer\n// and makes the y of the vec2 be the proper id\nvec2 opU( vec2 d1, vec2 d2 ){\n    \n    return (d1.x<d2.x) ? d1 : d2;\n    \n}\n\n//--------------------------------\n// Modelling \n//--------------------------------\nfloat map( vec3 p ){  \n    p *= 3.;\n    vec2 res = vec2(doExo(p) ,1.); \n    res = opU(res, vec2(doCore(p) ,2.));\n    \n    return res.x;\n}\n\nuniform vec2 resolution;\n\nuniform vec3 boundsA;\nuniform vec3 boundsB;\nuniform vec3 dims;\nuniform float time;\n\nvec3 vertDims = dims + vec3(1);\nvec3 scale = (boundsB - boundsA) / dims;\nvec3 shift = boundsA;\n\n// float map(vec3 p) {\n//     return length(p) - .5 + sin(time / 1000.) * .2;\n// }\n\n// void pR(inout vec2 p, float a) {\n//     p = cos(a)*p + sin(a)*vec2(p.y, -p.x);\n// }\n\n// float vmax(vec3 v) {\n//     return max(max(v.x, v.y), v.z);\n// }\n\n// // Box: correct distance to corners\n// float fBox(vec3 p, vec3 b) {\n//     vec3 d = abs(p) - b;\n//     return length(max(d, vec3(0))) + vmax(min(d, vec3(0)));\n// }\n\n// float map(vec3 p) {\n//     // return length(p) - .5 + sin(time / 1000.) * .2;\n//     // return length(p) - .9;\n//     pR(p.xy, .5);\n//     pR(p.zx, .2);\n//     return fBox(p, vec3(.5));\n// }\n\nvec3 vertFromIndex(float index) {\n    vec3 vert = vec3(0);\n    vert.x = mod(index, vertDims.x);\n    vert.y = mod(floor(index / vertDims.x), vertDims.y);\n    vert.z = mod(floor(index / (vertDims.y * vertDims.x)), vertDims.z);\n    return scale * vert + shift; \n}\n\nvoid main() {\n\n    float vertIndex = float(coordToIndex(gl_FragCoord.xy, resolution.xy));\n\n    if (vertIndex >= vertDims.x * vertDims.y * vertDims.z) {\n        gl_FragColor = vec4(1);\n        return;\n    }\n\n    vec3 vert = vertFromIndex(vertIndex);\n    float potential = map(vert);\n    gl_FragColor = encode_float_1117569599(potential);\n}\n"
-    );
-
     this.totalCubes = dims[0] * dims[1] * dims[2];
-    this.scene = scene;
-    this.gl = scene.gl;
-    this.startTime = new Date().getTime();
-
-    this.numWorkers = 1;
-    this.workerPool = new WorkerPool('build/workers/march.js', this.numWorkers);
-};
+}
 
 CubeMarch.prototype.sizeBuckets = function(pixels, maxSize) {
     return Math.ceil(pixels / Math.max(pixels / maxSize));
@@ -69068,7 +69072,7 @@ CubeMarch.prototype.calcPotentials = function(volumeIndex, pixels, uniforms) {
     var value;
     var i;
     var bl;
-    var gl = this.gl;
+    var gl = this.scene.gl;
 
     uniforms.boundsA = volume.bounds[0];
     uniforms.boundsB = volume.bounds[1];
@@ -69081,7 +69085,7 @@ CubeMarch.prototype.calcPotentials = function(volumeIndex, pixels, uniforms) {
 
     gl.readPixels(
         0, 0,
-        this.gl.drawingBufferWidth, this.gl.drawingBufferHeight,
+        gl.drawingBufferWidth, gl.drawingBufferHeight,
         gl.RGBA, gl.UNSIGNED_BYTE,
         pixels
     );
@@ -69147,7 +69151,7 @@ CubeMarch.prototype.abort = function() {
 CubeMarch.prototype.march = function(config) {
 
     this.cubesMarched = 0;
-    var gl = this.gl;
+    var gl = this.scene.gl;
 
     var uniforms = {
         time: new Date().getTime() - this.startTime
@@ -69191,90 +69195,177 @@ var STLExporter = require("./stl-exporter");
 var Renderer = require("./renderer");
 var Ractive = require('ractive');
 
-var dd = 200;
-var dims = [dd, dd, dd];
 var s = 1;
 var bounds = [
     [-s, -s, -s],
     [s, s, s]
 ];
 
-var cubeMarch = new CubeMarch(dims, bounds, document.getElementById('background'));
+var state = {
+    preview: {
+        resolution: 50
+    },
+    download: {
+        resolution: 500
+    }
+};
+
+var cubeMarch = new CubeMarch(document.getElementById('background'));
 var exporter = new STLExporter();
 var renderer = new Renderer(document.getElementById('scene'));
 
 
-var template = "<p class=\"progress\">{{ progress }}</p>\n\n<button class=\"btn\" on-click=\"start-render\">Render</button>\n<button class=\"btn\" on-click=\"start-save\">Save</button>\n<button class=\"btn\" on-click=\"cancel\">Cancel</button>\n";
+var template = "<div class=\"controls\">\n\n    <fieldset\n        class=\"\n            control-section\n            {{#if preview.disable }}\n                control-section--disabled\n            {{/if}}\n        \"\n    >\n        <h3 class=\"control-heading\">Preview</h3>\n        <label class=\"control-label\" for=\"preview-resolution\">Resolution</label>\n        <input\n            class=\"control-input\"\n            id=\"preview-resolution\"\n            type=\"number\"\n            value=\"{{ preview.resolution }}\"\n            {{#if preview.disable }}\n                disabled\n            {{/if}}\n        >\n        <button\n            class=\"btn\"\n            on-click=\"preview.start\"\n            {{#if preview.disable }}\n                disabled\n            {{/if}}\n        >Render</button>\n        {{#if preview.showCancel }}\n            <button class=\"btn\" on-click=\"preview.cancel\">Cancel</button>\n        {{/if}}\n    </fieldset>\n\n    <fieldset\n        class=\"\n            control-section\n            {{#if download.disable }}\n                control-section--disabled\n            {{/if}}\n        \"\n    >\n        <h3 class=\"control-heading\">Download</h3>\n        <label class=\"control-label\" for=\"preview-resolution\">Resolution</label>\n        <input\n            class=\"control-input\"\n            id=\"preview-resolution\"\n            type=\"number\"\n            value=\"{{ download.resolution }}\"\n            {{#if download.disable }}\n                disabled\n            {{/if}}\n        >\n        <button\n            class=\"btn\"\n            on-click=\"download.start\"\n            {{#if download.disable }}\n                disabled\n            {{/if}}\n        >Generate</button>\n        {{#if download.showCancel }}\n            <button class=\"btn\" on-click=\"download.cancel\">Cancel</button>\n        {{/if}}\n    </fieldset>\n\n    <p class=\"progress\">{{ progress }}</p>\n</div>\n";
 var ractive = new Ractive({
     el: '#ui',
-    template: template
+    template: template,
+    data: state
 });
 
 
 
-var updateProgress = function(cubesMarched, totalCubes) {
-    ractive.set('progress', ((cubesMarched / totalCubes) * 100).toFixed(2) + '% complete');
+var Control = function(ractive) {
+    this.ractive = ractive;
+}
+
+Control.prototype = {
+
+    init: function() {
+        this.ractive.on('busy', this.busyHandler.bind(this));
+        this.ractive.on('ready', this.readyHandler.bind(this));
+        this.ractive.on(this.ns('start'), this.start.bind(this));
+        this.ractive.on(this.ns('cancel'), this.cancel.bind(this));
+    },
+
+    busyHandler: function(control) {
+        if (control !== this) {
+            this.ractive.set(this.ns('disable'), true);
+        }
+    },
+
+    readyHandler: function() {
+        this.ractive.set(this.ns('disable'), false);
+    },
+
+    done: function() {
+        this.ractive.set(this.ns('showCancel'), false);
+        this.ractive.fire('ready');
+    },
+
+    start: function() {
+        this.ractive.set(this.ns('showCancel'), true);
+        this.ractive.fire('busy', this);
+    },
+
+    cancel: function() {
+        this.ractive.set('progress', '');
+        this.ractive.set(this.ns('showCancel'), false);
+        this.ractive.fire('ready');
+    },
+
+    progress: function(cubesMarched, totalCubes) {
+        this.ractive.set('progress', ((cubesMarched / totalCubes) * 100).toFixed(2) + '% complete');
+    },
+
+    ns: function(key) {
+        return [this.namespace, key].join('.');
+    }
 };
 
 
 
-var updateRender = function(data, cubesMarched, totalCubes) {
-    updateProgress(cubesMarched, totalCubes);
+var Preview = function(cubeMarch, renderer, ractive) {
+    Control.call(this, ractive);
+    this.renderer = renderer;
+    this.cubeMarch = cubeMarch;
+}
+
+Preview.prototype = Object.create(Control.prototype);
+Preview.prototype.constructor = Preview;
+Preview.prototype.parent = Control.prototype;
+Preview.prototype.namespace = 'preview';
+
+Preview.prototype.update = function(data) {
     if ( ! data) {
         return;
     }
-    renderer.addSection(data.vertices, data.faces);
-};
+    this.renderer.addSection(data.vertices, data.faces);
+}
 
-var render = function() {
-    cubeMarch.abort();
-    renderer.startModel();
-    cubeMarch.march({
-        onSection: updateRender,
-        onProgress: updateProgress
+Preview.prototype.start = function() {
+    this.parent.start.call(this);
+    this.cubeMarch.abort();
+    var dd = parseInt(this.ractive.get('preview.resolution'), 10);
+    this.cubeMarch.setVolume([dd, dd, dd], bounds);
+    this.renderer.startModel();
+    this.cubeMarch.march({
+        onSection: this.update.bind(this),
+        onProgress: this.progress.bind(this),
+        onDone: this.done.bind(this)
     });
 };
 
+Preview.prototype.cancel =function() {
+    this.parent.cancel.call(this);
+    this.cubeMarch.abort();
+};
 
 
-var updateSave = function(data, cubesMarched, totalCubes) {
-    updateProgress(cubesMarched, totalCubes);
+
+var Download = function(cubeMarch, exporter, ractive) {
+    Control.call(this, ractive);
+    this.exporter = exporter;
+    this.cubeMarch = cubeMarch;
+}
+
+Download.prototype = Object.create(Control.prototype);
+Download.prototype.constructor = Download;
+Download.prototype.parent = Control.prototype;
+Download.prototype.namespace = 'download';
+
+Download.prototype.update = function(data) {
     if ( ! data) {
         return;
     }
-    exporter.addSection(data.vertices, data.faces);
+    this.exporter.addSection(data.vertices, data.faces);
 };
 
-var saveDone = function() {
-    exporter.finishModel();
+Download.prototype.done = function() {
+    this.parent.done.call(this);
+    this.exporter.finishModel();
 };
 
-var save = function() {
-    cubeMarch.abort();
+Download.prototype.start = function() {
+    this.parent.start.call(this);
+
+    this.cubeMarch.abort();
+    var dd = parseInt(this.ractive.get('download.resolution'), 10);
+    var dims = [dd, dd, dd];
+    this.cubeMarch.setVolume(dims, bounds);
     var filename = [
         'marched',
         new Date().getTime(),
         dims[0] + 'x' + dims[1] + 'x' + dims[2]
     ].join('-');
-    exporter.startModel(filename);
-    cubeMarch.march({
-        onSection: updateSave,
-        onProgress: updateProgress,
-        onDone: saveDone
+    this.exporter.startModel(filename);
+    this.cubeMarch.march({
+        onSection: this.update.bind(this),
+        onProgress: this.progress.bind(this),
+        onDone: this.done.bind(this)
     });
 };
 
-
-var cancel = function() {
-    cubeMarch.abort();
-    ractive.set('progress', '');
+Download.prototype.cancel =function() {
+    this.parent.cancel.call(this);
+    this.cubeMarch.abort();
 };
 
 
+var preview = new Preview(cubeMarch, renderer, ractive);
+var download = new Download(cubeMarch, exporter, ractive);
 
-ractive.on('start-render', render);
-ractive.on('start-save', save);
-ractive.on('cancel', cancel);
+preview.init();
+download.init();
 
 },{"./cubemarch":8,"./renderer":10,"./stl-exporter":13,"ractive":3}],10:[function(require,module,exports){
 "use strict";
