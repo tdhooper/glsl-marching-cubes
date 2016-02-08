@@ -5,7 +5,7 @@ var STLExporter = require("./stl-exporter");
 var Renderer = require("./renderer");
 var Ractive = require('ractive');
 
-var dd = 50;
+var dd = 200;
 var dims = [dd, dd, dd];
 var s = 1;
 var bounds = [
@@ -79,6 +79,13 @@ var save = function() {
 };
 
 
+var cancel = function() {
+    cubeMarch.abort();
+    ractive.set('progress', '');
+};
+
+
 
 ractive.on('start-render', render);
 ractive.on('start-save', save);
+ractive.on('cancel', cancel);
