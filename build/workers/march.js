@@ -409,20 +409,23 @@ var marchCubes = function(start, end, dims, bounds, potentials) {
 var potentials;
 
 onmessage = function(e) {
-    var data = e.data;
+    var message = e.data;
 
-    if ( ! data.hasOwnProperty('start')) {
-        potentials = new Float32Array(data);
-        return;
+    if (message.action == 'init') {
+
+        potentials = new Float32Array(message.data);
+        postMessage(true);
+
+    } else if (message.action == 'march') {
+
+        var start = message.data.start;
+        var end = message.data.end;
+        var dims = message.data.dims;
+        var bounds = message.data.bounds;
+
+        var result = marchCubes(start, end, dims, bounds, potentials);
+        postMessage(result);
     }
-
-    var start = data.start;
-    var end = data.end;
-    var dims = data.dims;
-    var bounds = data.bounds;
-
-    var result = marchCubes(start, end, dims, bounds, potentials);
-    postMessage(result);
 };
 
 },{}]},{},[1]);
