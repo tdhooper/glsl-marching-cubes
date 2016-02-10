@@ -69006,6 +69006,178 @@ define("build/js/twgl-includer-full", function(){});
 }));
 
 },{}],8:[function(require,module,exports){
+var ControlSection = require('./control-section.js').ControlSection;
+
+var BoundingControls = function(ractive) {
+    ControlSection.call(this, ractive);
+};
+
+BoundingControls.prototype = Object.create(ControlSection.prototype);
+BoundingControls.prototype.constructor = BoundingControls;
+BoundingControls.prototype.namespace = 'bounding';
+
+module.exports = BoundingControls;
+
+},{"./control-section.js":9}],9:[function(require,module,exports){
+
+var ControlSection = function(ractive) {
+    this.ractive = ractive;
+};
+
+ControlSection.prototype = {
+
+    init: function() {
+        this.ractive.on('busy', this.busyHandler.bind(this));
+        this.ractive.on('ready', this.readyHandler.bind(this));
+    },
+
+    ns: function(key) {
+        return [this.namespace, key].join('.');
+    },
+
+    busyHandler: function(control) {
+        if (control !== this) {
+            this.ractive.set(this.ns('disable'), true);
+        }
+    },
+
+    readyHandler: function() {
+        this.ractive.set(this.ns('disable'), false);
+    }
+};
+
+
+var ProcessControls = function(ractive) {
+    ControlSection.call(this, ractive);
+};
+
+ProcessControls.prototype = Object.create(ControlSection.prototype);
+ProcessControls.prototype.constructor = ProcessControls;
+
+ProcessControls.prototype.init = function() {
+    ControlSection.prototype.init.call(this);
+    this.ractive.on(this.ns('start'), this.start.bind(this));
+    this.ractive.on(this.ns('cancel'), this.cancel.bind(this));
+};
+
+ProcessControls.prototype.done = function() {
+    this.ractive.set(this.ns('showCancel'), false);
+    this.ractive.fire('ready');
+};
+
+ProcessControls.prototype.start = function() {
+    this.ractive.set(this.ns('showCancel'), true);
+    this.ractive.fire('busy', this);
+};
+
+ProcessControls.prototype.cancel = function() {
+    this.ractive.set('progress', '');
+    this.ractive.set(this.ns('showCancel'), false);
+    this.ractive.fire('ready');
+};
+
+ProcessControls.prototype.progress = function(cubesMarched, totalCubes) {
+    this.ractive.set('progress', ((cubesMarched / totalCubes) * 100).toFixed(2) + '% complete');
+};
+
+module.exports.ControlSection = ControlSection;
+module.exports.ProcessControls = ProcessControls;
+
+},{}],10:[function(require,module,exports){
+var ProcessControls = require('./control-section.js').ProcessControls;
+
+var DownloadControls = function(cubeMarch, exporter, ractive) {
+    ProcessControls.call(this, ractive);
+    this.exporter = exporter;
+    this.cubeMarch = cubeMarch;
+};
+
+DownloadControls.prototype = Object.create(ProcessControls.prototype);
+DownloadControls.prototype.constructor = DownloadControls;
+DownloadControls.prototype.namespace = 'download';
+
+DownloadControls.prototype.update = function(data) {
+    if ( ! data) {
+        return;
+    }
+    this.exporter.addSection(data.vertices, data.faces);
+};
+
+DownloadControls.prototype.done = function() {
+    ProcessControls.prototype.done.call(this);
+    this.exporter.finishModel();
+};
+
+DownloadControls.prototype.start = function() {
+    ProcessControls.prototype.start.call(this);
+
+    this.cubeMarch.abort();
+    var dd = parseInt(this.ractive.get('download.resolution'), 10);
+    var dims = [dd, dd, dd];
+    var bounds = this.ractive.get('bounds');
+    this.cubeMarch.setVolume(dims, bounds);
+    var filename = [
+        'marched',
+        new Date().getTime(),
+        dims[0] + 'x' + dims[1] + 'x' + dims[2]
+    ].join('-');
+    this.exporter.startModel(filename);
+    this.cubeMarch.march({
+        onSection: this.update.bind(this),
+        onProgress: this.progress.bind(this),
+        onDone: this.done.bind(this)
+    });
+};
+
+DownloadControls.prototype.cancel =function() {
+    ProcessControls.prototype.cancel.call(this);
+    this.cubeMarch.abort();
+};
+
+module.exports = DownloadControls;
+
+},{"./control-section.js":9}],11:[function(require,module,exports){
+var ProcessControls = require('./control-section.js').ProcessControls;
+
+var PreviewControls = function(cubeMarch, renderer, ractive) {
+    ProcessControls.call(this, ractive);
+    this.renderer = renderer;
+    this.cubeMarch = cubeMarch;
+};
+
+PreviewControls.prototype = Object.create(ProcessControls.prototype);
+PreviewControls.prototype.constructor = PreviewControls;
+PreviewControls.prototype.namespace = 'preview';
+
+PreviewControls.prototype.update = function(data) {
+    if ( ! data) {
+        return;
+    }
+    this.renderer.addSection(data.vertices, data.faces);
+};
+
+PreviewControls.prototype.start = function() {
+    ProcessControls.prototype.start.call(this);
+    this.cubeMarch.abort();
+    var dd = parseInt(this.ractive.get('preview.resolution'), 10);
+    var bounds = this.ractive.get('bounds');
+    this.cubeMarch.setVolume([dd, dd, dd], bounds);
+    this.renderer.startModel();
+    this.cubeMarch.march({
+        onSection: this.update.bind(this),
+        onProgress: this.progress.bind(this),
+        onDone: this.done.bind(this)
+    });
+};
+
+PreviewControls.prototype.cancel =function() {
+    this.parent.cancel.call(this);
+    this.cubeMarch.abort();
+};
+
+module.exports = PreviewControls;
+
+},{"./control-section.js":9}],12:[function(require,module,exports){
 "use strict";
 
 var twgl = require("twgl.js");
@@ -69187,13 +69359,16 @@ CubeMarch.prototype.march = function(config) {
 
 module.exports = CubeMarch;
 
-},{"./scene":11,"./split-volume":12,"./worker-pool":15,"glsl-read-float":2,"ramda":4,"twgl.js":7}],9:[function(require,module,exports){
+},{"./scene":15,"./split-volume":16,"./worker-pool":19,"glsl-read-float":2,"ramda":4,"twgl.js":7}],13:[function(require,module,exports){
 "use strict";
 
 var CubeMarch = require("./cubemarch");
 var STLExporter = require("./stl-exporter");
 var Renderer = require("./renderer");
 var Ractive = require('ractive');
+var PreviewControls = require('./controls/preview-controls.js');
+var DownloadControls = require('./controls/download-controls.js');
+var BoundingControls = require('./controls/bounding-controls.js');
 
 var s = 1;
 var bounds = [
@@ -69207,7 +69382,19 @@ var state = {
     },
     download: {
         resolution: 500
-    }
+    },
+    bounding: {
+        position: {
+            x: 0,
+            y: 0,
+            z: 0
+        },
+        size: {
+            width: 2,
+            height: 2,
+            depth: 2
+        }
+    },
 };
 
 var cubeMarch = new CubeMarch(document.getElementById('background'));
@@ -69215,159 +69402,37 @@ var exporter = new STLExporter();
 var renderer = new Renderer(document.getElementById('scene'));
 
 
-var template = "<div class=\"controls\">\n\n    <fieldset\n        class=\"\n            control-section\n            {{#if preview.disable }}\n                control-section--disabled\n            {{/if}}\n        \"\n    >\n        <h3 class=\"control-heading\">Preview</h3>\n        <label class=\"control-label\" for=\"preview-resolution\">Resolution</label>\n        <input\n            class=\"control-input\"\n            id=\"preview-resolution\"\n            type=\"number\"\n            value=\"{{ preview.resolution }}\"\n            {{#if preview.disable }}\n                disabled\n            {{/if}}\n        >\n        <button\n            class=\"btn\"\n            on-click=\"preview.start\"\n            {{#if preview.disable }}\n                disabled\n            {{/if}}\n        >Render</button>\n        {{#if preview.showCancel }}\n            <button class=\"btn\" on-click=\"preview.cancel\">Cancel</button>\n        {{/if}}\n    </fieldset>\n\n    <fieldset\n        class=\"\n            control-section\n            {{#if download.disable }}\n                control-section--disabled\n            {{/if}}\n        \"\n    >\n        <h3 class=\"control-heading\">Download</h3>\n        <label class=\"control-label\" for=\"preview-resolution\">Resolution</label>\n        <input\n            class=\"control-input\"\n            id=\"preview-resolution\"\n            type=\"number\"\n            value=\"{{ download.resolution }}\"\n            {{#if download.disable }}\n                disabled\n            {{/if}}\n        >\n        <button\n            class=\"btn\"\n            on-click=\"download.start\"\n            {{#if download.disable }}\n                disabled\n            {{/if}}\n        >Generate</button>\n        {{#if download.showCancel }}\n            <button class=\"btn\" on-click=\"download.cancel\">Cancel</button>\n        {{/if}}\n    </fieldset>\n\n    <p class=\"progress\">{{ progress }}</p>\n</div>\n";
+var template = "<div class=\"controls\">\n\n    <fieldset\n        class=\"\n            control-section\n            {{#if bounding.disable }}\n                control-section--disabled\n            {{/if}}\n        \"\n    >\n        <h3 class=\"control-heading\">Bounding box</h3>\n\n        <div class=\"control-group control-group--horizontal\">\n            <h4>Position</h4>\n            <ul>\n                <li class=\"control\">\n                    <label class=\"control-label\" for=\"bounding-x\">x</label>\n                    <input\n                        class=\"control-input control-input--narrow\"\n                        id=\"bounding-x\"\n                        type=\"number\"\n                        value=\"{{ bounding.position.x }}\"\n                        {{#if bounding.disable }}\n                            disabled\n                        {{/if}}\n                    >\n                </li>\n                <li class=\"control\">\n                    <label class=\"control-label\" for=\"bounding-y\">y</label>\n                    <input\n                        class=\"control-input control-input--narrow\"\n                        id=\"bounding-y\"\n                        type=\"number\"\n                        value=\"{{ bounding.position.y }}\"\n                        {{#if bounding.disable }}\n                            disabled\n                        {{/if}}\n                    >\n                <li class=\"control\">\n                    <label class=\"control-label\" for=\"bounding-z\">z</label>\n                    <input\n                        class=\"control-input control-input--narrow\"\n                        id=\"bounding-z\"\n                        type=\"number\"\n                        value=\"{{ bounding.position.z }}\"\n                        {{#if bounding.disable }}\n                            disabled\n                        {{/if}}\n                    >\n                </li>\n            </ul>\n        </div>\n\n        <div class=\"control-group control-group--horizontal\">\n            <h4>Size</h4>\n            <ul>\n                <li class=\"control\">\n                    <label class=\"control-label\" for=\"bounding-w\">w</label>\n                    <input\n                        class=\"control-input control-input--narrow\"\n                        id=\"bounding-w\"\n                        type=\"number\"\n                        value=\"{{ bounding.size.width }}\"\n                        {{#if bounding.disable }}\n                            disabled\n                        {{/if}}\n                    >\n                </li>\n                <li class=\"control\">\n                    <label class=\"control-label\" for=\"bounding-h\">h</label>\n                    <input\n                        class=\"control-input control-input--narrow\"\n                        id=\"bounding-h\"\n                        type=\"number\"\n                        value=\"{{ bounding.size.height }}\"\n                        {{#if bounding.disable }}\n                            disabled\n                        {{/if}}\n                    >\n                <li class=\"control\">\n                    <label class=\"control-label\" for=\"bounding-d\">d</label>\n                    <input\n                        class=\"control-input control-input--narrow\"\n                        id=\"bounding-d\"\n                        type=\"number\"\n                        value=\"{{ bounding.size.depth }}\"\n                        {{#if bounding.disable }}\n                            disabled\n                        {{/if}}\n                    >\n                </li>\n            </ul>\n        </div>\n    </fieldset>\n\n    <fieldset\n        class=\"\n            control-section\n            {{#if preview.disable }}\n                control-section--disabled\n            {{/if}}\n        \"\n    >\n        <h3 class=\"control-heading\">Preview</h3>\n        <div class=\"control\">\n            <label class=\"control-label\" for=\"preview-resolution\">Resolution</label>\n            <input\n                class=\"control-input\"\n                id=\"preview-resolution\"\n                type=\"number\"\n                value=\"{{ preview.resolution }}\"\n                {{#if preview.disable }}\n                    disabled\n                {{/if}}\n            >\n        </div>\n        <button\n            class=\"btn\"\n            on-click=\"preview.start\"\n            {{#if preview.disable }}\n                disabled\n            {{/if}}\n        >Render</button>\n        {{#if preview.showCancel }}\n            <button class=\"btn\" on-click=\"preview.cancel\">Cancel</button>\n        {{/if}}\n    </fieldset>\n\n    <fieldset\n        class=\"\n            control-section\n            {{#if download.disable }}\n                control-section--disabled\n            {{/if}}\n        \"\n    >\n        <h3 class=\"control-heading\">Download</h3>\n        <div class=\"control\">\n            <label class=\"control-label\" for=\"preview-resolution\">Resolution</label>\n            <input\n                class=\"control-input\"\n                id=\"preview-resolution\"\n                type=\"number\"\n                value=\"{{ download.resolution }}\"\n                {{#if download.disable }}\n                    disabled\n                {{/if}}\n            >\n        </div>\n        <button\n            class=\"btn\"\n            on-click=\"download.start\"\n            {{#if download.disable }}\n                disabled\n            {{/if}}\n        >Generate</button>\n        {{#if download.showCancel }}\n            <button class=\"btn\" on-click=\"download.cancel\">Cancel</button>\n        {{/if}}\n    </fieldset>\n\n    <p class=\"progress\">{{ progress }}</p>\n</div>\n";
 var ractive = new Ractive({
     el: '#ui',
     template: template,
-    data: state
+    data: state,
+    computed: {
+        bounds: function() {
+            var position = this.get('bounding.position');
+            var size = this.get('bounding.size');
+            var w2 = size.width / 2;
+            var h2 = size.height / 2;
+            var d2 = size.depth / 2;
+            var bounds = [
+                [position.x - w2, position.y - h2, position.z - d2],
+                [position.x + w2, position.y + h2, position.z + d2]
+            ];
+            return bounds;
+        }
+    }
 });
 
 
+var previewControls = new PreviewControls(cubeMarch, renderer, ractive);
+var downloadControls = new DownloadControls(cubeMarch, exporter, ractive);
+var boundingControls = new BoundingControls(ractive);
 
-var Control = function(ractive) {
-    this.ractive = ractive;
-}
+previewControls.init();
+downloadControls.init();
+boundingControls.init();
 
-Control.prototype = {
-
-    init: function() {
-        this.ractive.on('busy', this.busyHandler.bind(this));
-        this.ractive.on('ready', this.readyHandler.bind(this));
-        this.ractive.on(this.ns('start'), this.start.bind(this));
-        this.ractive.on(this.ns('cancel'), this.cancel.bind(this));
-    },
-
-    busyHandler: function(control) {
-        if (control !== this) {
-            this.ractive.set(this.ns('disable'), true);
-        }
-    },
-
-    readyHandler: function() {
-        this.ractive.set(this.ns('disable'), false);
-    },
-
-    done: function() {
-        this.ractive.set(this.ns('showCancel'), false);
-        this.ractive.fire('ready');
-    },
-
-    start: function() {
-        this.ractive.set(this.ns('showCancel'), true);
-        this.ractive.fire('busy', this);
-    },
-
-    cancel: function() {
-        this.ractive.set('progress', '');
-        this.ractive.set(this.ns('showCancel'), false);
-        this.ractive.fire('ready');
-    },
-
-    progress: function(cubesMarched, totalCubes) {
-        this.ractive.set('progress', ((cubesMarched / totalCubes) * 100).toFixed(2) + '% complete');
-    },
-
-    ns: function(key) {
-        return [this.namespace, key].join('.');
-    }
-};
-
-
-
-var Preview = function(cubeMarch, renderer, ractive) {
-    Control.call(this, ractive);
-    this.renderer = renderer;
-    this.cubeMarch = cubeMarch;
-}
-
-Preview.prototype = Object.create(Control.prototype);
-Preview.prototype.constructor = Preview;
-Preview.prototype.parent = Control.prototype;
-Preview.prototype.namespace = 'preview';
-
-Preview.prototype.update = function(data) {
-    if ( ! data) {
-        return;
-    }
-    this.renderer.addSection(data.vertices, data.faces);
-}
-
-Preview.prototype.start = function() {
-    this.parent.start.call(this);
-    this.cubeMarch.abort();
-    var dd = parseInt(this.ractive.get('preview.resolution'), 10);
-    this.cubeMarch.setVolume([dd, dd, dd], bounds);
-    this.renderer.startModel();
-    this.cubeMarch.march({
-        onSection: this.update.bind(this),
-        onProgress: this.progress.bind(this),
-        onDone: this.done.bind(this)
-    });
-};
-
-Preview.prototype.cancel =function() {
-    this.parent.cancel.call(this);
-    this.cubeMarch.abort();
-};
-
-
-
-var Download = function(cubeMarch, exporter, ractive) {
-    Control.call(this, ractive);
-    this.exporter = exporter;
-    this.cubeMarch = cubeMarch;
-}
-
-Download.prototype = Object.create(Control.prototype);
-Download.prototype.constructor = Download;
-Download.prototype.parent = Control.prototype;
-Download.prototype.namespace = 'download';
-
-Download.prototype.update = function(data) {
-    if ( ! data) {
-        return;
-    }
-    this.exporter.addSection(data.vertices, data.faces);
-};
-
-Download.prototype.done = function() {
-    this.parent.done.call(this);
-    this.exporter.finishModel();
-};
-
-Download.prototype.start = function() {
-    this.parent.start.call(this);
-
-    this.cubeMarch.abort();
-    var dd = parseInt(this.ractive.get('download.resolution'), 10);
-    var dims = [dd, dd, dd];
-    this.cubeMarch.setVolume(dims, bounds);
-    var filename = [
-        'marched',
-        new Date().getTime(),
-        dims[0] + 'x' + dims[1] + 'x' + dims[2]
-    ].join('-');
-    this.exporter.startModel(filename);
-    this.cubeMarch.march({
-        onSection: this.update.bind(this),
-        onProgress: this.progress.bind(this),
-        onDone: this.done.bind(this)
-    });
-};
-
-Download.prototype.cancel =function() {
-    this.parent.cancel.call(this);
-    this.cubeMarch.abort();
-};
-
-
-var preview = new Preview(cubeMarch, renderer, ractive);
-var download = new Download(cubeMarch, exporter, ractive);
-
-preview.init();
-download.init();
-
-},{"./cubemarch":8,"./renderer":10,"./stl-exporter":13,"ractive":3}],10:[function(require,module,exports){
+},{"./controls/bounding-controls.js":8,"./controls/download-controls.js":10,"./controls/preview-controls.js":11,"./cubemarch":12,"./renderer":14,"./stl-exporter":17,"ractive":3}],14:[function(require,module,exports){
 "use strict";
 
 var THREE = require('three');
@@ -69495,7 +69560,7 @@ Renderer.prototype = {
 
 module.exports = Renderer;
 
-},{"three":6,"three.trackball":5}],11:[function(require,module,exports){
+},{"three":6,"three.trackball":5}],15:[function(require,module,exports){
 "use strict";
 
 var twgl = require("twgl.js");
@@ -69595,7 +69660,7 @@ Scene.prototype.draw = function(spec) {
 
 module.exports = Scene;
 
-},{"twgl.js":7}],12:[function(require,module,exports){
+},{"twgl.js":7}],16:[function(require,module,exports){
 
 var maxDimension = function(dims) {
     if (dims[0] > dims[1]) {
@@ -69698,7 +69763,7 @@ var splitVolume = function(volume, maxSize) {
 
 module.exports = splitVolume;
 
-},{}],13:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 "use strict";
 
 var STLWriter = require("./stl-writer");
@@ -69769,7 +69834,7 @@ STLExporter.prototype = {
 
 module.exports = STLExporter;
 
-},{"./stl-writer":14}],14:[function(require,module,exports){
+},{"./stl-writer":18}],18:[function(require,module,exports){
 var FileSaver = require("filesaver.js");
 
 var STLWriter = function() {}
@@ -69847,7 +69912,7 @@ STLWriter.prototype = {
 
 module.exports = STLWriter;
 
-},{"filesaver.js":1}],15:[function(require,module,exports){
+},{"filesaver.js":1}],19:[function(require,module,exports){
 
 var WorkerPool = function(filename, n) {
     this.queue = [];
@@ -69935,4 +70000,4 @@ WorkerPool.prototype.process = function(worker, job, done) {
 
 module.exports = WorkerPool;
 
-},{}]},{},[9]);
+},{}]},{},[13]);

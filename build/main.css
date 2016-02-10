@@ -444,6 +444,21 @@ body {
   margin: 0;
   height: 100%;
   background: #111;
+  font-size: 85%;
+}
+
+h4 {
+  margin: 0;
+}
+
+* + h4 {
+  margin-top: 1em;
+}
+
+ul {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
 }
 
 #background,
@@ -476,7 +491,7 @@ body {
   position: fixed;
   right: 0;
   top: 0;
-  color: white;
+  color: #eee;
   width: 250px;
   padding: 1em;
 }
@@ -490,8 +505,11 @@ body {
   border: none;
   padding: 0;
   margin: 0;
-  border-top: 5px solid #333;
+  border-top: 3px solid #333;
   padding-top: 1em;
+}
+
+* + .control-section {
   margin-top: 1em;
 }
 
@@ -499,8 +517,31 @@ body {
   color: #666;
 }
 
+* + .control-group {
+  margin-top: 1em;
+}
+
+.control-group--horizontal:before,
+.control-group--horizontal:after {
+  content: " ";
+  display: table;
+}
+
+.control-group--horizontal:after {
+  clear: both;
+}
+
+.control-group--horizontal .control {
+  float: left;
+}
+
+.control-group--horizontal .control + .control {
+  margin-left: 6px;
+}
+
 .control-heading {
   margin: 0;
+  font-weight: normal;
 }
 
 .control-label,
@@ -511,14 +552,22 @@ body {
 
 .control-input {
   width: 100px;
-  margin-left: 5px;
+  margin-left: 3px;
+}
+
+.control-input--narrow {
+  width: 40px;
 }
 
 input,
 button {
   background: #333;
   border: none;
-  padding: 10px;
+  padding: 6px;
+}
+
+input[type=number] {
+  padding-right: 3px;
 }
 
 input[disabled],
