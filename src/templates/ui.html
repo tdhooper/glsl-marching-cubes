@@ -3,22 +3,117 @@
     <fieldset
         class="
             control-section
+            {{#if bounding.disable }}
+                control-section--disabled
+            {{/if}}
+        "
+    >
+        <h3 class="control-heading">Bounding box</h3>
+
+        <div class="control-group control-group--horizontal">
+            <h4>Position</h4>
+            <ul>
+                <li class="control">
+                    <label class="control-label" for="bounding-x">x</label>
+                    <input
+                        class="control-input control-input--narrow"
+                        id="bounding-x"
+                        type="number"
+                        value="{{ bounding.position.x }}"
+                        {{#if bounding.disable }}
+                            disabled
+                        {{/if}}
+                    >
+                </li>
+                <li class="control">
+                    <label class="control-label" for="bounding-y">y</label>
+                    <input
+                        class="control-input control-input--narrow"
+                        id="bounding-y"
+                        type="number"
+                        value="{{ bounding.position.y }}"
+                        {{#if bounding.disable }}
+                            disabled
+                        {{/if}}
+                    >
+                <li class="control">
+                    <label class="control-label" for="bounding-z">z</label>
+                    <input
+                        class="control-input control-input--narrow"
+                        id="bounding-z"
+                        type="number"
+                        value="{{ bounding.position.z }}"
+                        {{#if bounding.disable }}
+                            disabled
+                        {{/if}}
+                    >
+                </li>
+            </ul>
+        </div>
+
+        <div class="control-group control-group--horizontal">
+            <h4>Size</h4>
+            <ul>
+                <li class="control">
+                    <label class="control-label" for="bounding-w">w</label>
+                    <input
+                        class="control-input control-input--narrow"
+                        id="bounding-w"
+                        type="number"
+                        value="{{ bounding.size.width }}"
+                        {{#if bounding.disable }}
+                            disabled
+                        {{/if}}
+                    >
+                </li>
+                <li class="control">
+                    <label class="control-label" for="bounding-h">h</label>
+                    <input
+                        class="control-input control-input--narrow"
+                        id="bounding-h"
+                        type="number"
+                        value="{{ bounding.size.height }}"
+                        {{#if bounding.disable }}
+                            disabled
+                        {{/if}}
+                    >
+                <li class="control">
+                    <label class="control-label" for="bounding-d">d</label>
+                    <input
+                        class="control-input control-input--narrow"
+                        id="bounding-d"
+                        type="number"
+                        value="{{ bounding.size.depth }}"
+                        {{#if bounding.disable }}
+                            disabled
+                        {{/if}}
+                    >
+                </li>
+            </ul>
+        </div>
+    </fieldset>
+
+    <fieldset
+        class="
+            control-section
             {{#if preview.disable }}
                 control-section--disabled
             {{/if}}
         "
     >
         <h3 class="control-heading">Preview</h3>
-        <label class="control-label" for="preview-resolution">Resolution</label>
-        <input
-            class="control-input"
-            id="preview-resolution"
-            type="number"
-            value="{{ preview.resolution }}"
-            {{#if preview.disable }}
-                disabled
-            {{/if}}
-        >
+        <div class="control">
+            <label class="control-label" for="preview-resolution">Resolution</label>
+            <input
+                class="control-input"
+                id="preview-resolution"
+                type="number"
+                value="{{ preview.resolution }}"
+                {{#if preview.disable }}
+                    disabled
+                {{/if}}
+            >
+        </div>
         <button
             class="btn"
             on-click="preview.start"
@@ -40,16 +135,18 @@
         "
     >
         <h3 class="control-heading">Download</h3>
-        <label class="control-label" for="preview-resolution">Resolution</label>
-        <input
-            class="control-input"
-            id="preview-resolution"
-            type="number"
-            value="{{ download.resolution }}"
-            {{#if download.disable }}
-                disabled
-            {{/if}}
-        >
+        <div class="control">
+            <label class="control-label" for="preview-resolution">Resolution</label>
+            <input
+                class="control-input"
+                id="preview-resolution"
+                type="number"
+                value="{{ download.resolution }}"
+                {{#if download.disable }}
+                    disabled
+                {{/if}}
+            >
+        </div>
         <button
             class="btn"
             on-click="download.start"
