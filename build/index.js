@@ -69171,7 +69171,7 @@ PreviewControls.prototype.start = function() {
 };
 
 PreviewControls.prototype.cancel =function() {
-    this.parent.cancel.call(this);
+    ProcessControls.prototype.cancel.call(this);
     this.cubeMarch.abort();
 };
 
