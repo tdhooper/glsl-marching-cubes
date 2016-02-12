@@ -1,13 +1,6 @@
 <div class="controls">
 
-    <fieldset
-        class="
-            control-section
-            {{#if bounding.disable }}
-                control-section--disabled
-            {{/if}}
-        "
-    >
+    <fieldset class="control-section">
         <h3 class="control-heading">Bounding box</h3>
 
         <div class="control-group control-group--horizontal">
@@ -20,9 +13,6 @@
                         id="bounding-x"
                         type="number"
                         value="{{ bounding.position.x }}"
-                        {{#if bounding.disable }}
-                            disabled
-                        {{/if}}
                     >
                 </li>
                 <li class="control">
@@ -32,9 +22,6 @@
                         id="bounding-y"
                         type="number"
                         value="{{ bounding.position.y }}"
-                        {{#if bounding.disable }}
-                            disabled
-                        {{/if}}
                     >
                 <li class="control">
                     <label class="control-label" for="bounding-z">z</label>
@@ -43,9 +30,6 @@
                         id="bounding-z"
                         type="number"
                         value="{{ bounding.position.z }}"
-                        {{#if bounding.disable }}
-                            disabled
-                        {{/if}}
                     >
                 </li>
             </ul>
@@ -61,9 +45,6 @@
                         id="bounding-w"
                         type="number"
                         value="{{ bounding.size.width }}"
-                        {{#if bounding.disable }}
-                            disabled
-                        {{/if}}
                     >
                 </li>
                 <li class="control">
@@ -73,9 +54,6 @@
                         id="bounding-h"
                         type="number"
                         value="{{ bounding.size.height }}"
-                        {{#if bounding.disable }}
-                            disabled
-                        {{/if}}
                     >
                 <li class="control">
                     <label class="control-label" for="bounding-d">d</label>
@@ -84,23 +62,13 @@
                         id="bounding-d"
                         type="number"
                         value="{{ bounding.size.depth }}"
-                        {{#if bounding.disable }}
-                            disabled
-                        {{/if}}
                     >
                 </li>
             </ul>
         </div>
     </fieldset>
 
-    <fieldset
-        class="
-            control-section
-            {{#if preview.disable }}
-                control-section--disabled
-            {{/if}}
-        "
-    >
+    <fieldset class="control-section">
         <h3 class="control-heading">Preview</h3>
         <div class="control">
             <label class="control-label" for="preview-resolution">Resolution</label>
@@ -109,9 +77,6 @@
                 id="preview-resolution"
                 type="number"
                 value="{{ preview.resolution }}"
-                {{#if preview.disable }}
-                    disabled
-                {{/if}}
             >
         </div>
         <button
@@ -126,14 +91,7 @@
         {{/if}}
     </fieldset>
 
-    <fieldset
-        class="
-            control-section
-            {{#if download.disable }}
-                control-section--disabled
-            {{/if}}
-        "
-    >
+    <fieldset class="control-section">
         <h3 class="control-heading">Download</h3>
         <div class="control">
             <label class="control-label" for="preview-resolution">Resolution</label>
@@ -142,9 +100,6 @@
                 id="preview-resolution"
                 type="number"
                 value="{{ download.resolution }}"
-                {{#if download.disable }}
-                    disabled
-                {{/if}}
             >
         </div>
         <button
