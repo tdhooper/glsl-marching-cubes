@@ -31,6 +31,11 @@ var Renderer = function(el) {
     var axisHelper = new THREE.AxisHelper( 1 );
     scene.add( axisHelper );
 
+    var boundsGeometry = new THREE.BoxGeometry(1, 1, 1);
+    var boundsObj = new THREE.Mesh(boundsGeometry, this.material);
+    var bounds = new THREE.BoxHelper(boundsObj);
+    scene.add(bounds);
+
     function render() {
         renderer.render(scene, camera);
     }
@@ -83,6 +88,7 @@ var Renderer = function(el) {
 
     this.sections = [];
     this.scene = scene;
+    this.bounds = bounds;
 };
 
 Renderer.prototype = {
@@ -120,6 +126,11 @@ Renderer.prototype = {
         var obj = new THREE.Mesh(geometry, this.material);
         this.sections.push(obj);
         this.scene.add(obj);
+    },
+
+    setBoundingBox: function(x, y, z, width, height, depth) {
+        this.bounds.position.set(x, y, z);
+        this.bounds.scale.set(width, height, depth);
     }
 };
 

@@ -64,7 +64,7 @@ var ractive = new Ractive({
 
 var previewControls = new PreviewControls(cubeMarch, renderer, ractive);
 var downloadControls = new DownloadControls(cubeMarch, exporter, ractive);
-var boundingControls = new BoundingControls(ractive);
+var boundingControls = new BoundingControls(renderer, ractive);
 
 previewControls.init();
 downloadControls.init();
