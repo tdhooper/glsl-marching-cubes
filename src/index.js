@@ -29,7 +29,7 @@ window.addEventListener('resize', editor.resize.bind(editor), false);
 var state = {
     progress: 'Ready',
     preview: {
-        equal: true,
+        proportional: true,
         resolution: {
             x: 50,
             y: 50,
@@ -37,7 +37,7 @@ var state = {
         }
     },
     download: {
-        equal: true,
+        proportional: true,
         resolution: {
             x: 500,
             y: 500,
