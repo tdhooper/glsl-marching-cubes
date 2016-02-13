@@ -4,7 +4,6 @@ var twgl = require("twgl.js");
 var glslify = require("glslify");
 var Scene = require('./scene');
 var WorkerPool = require('./worker-pool');
-var R = require('ramda');
 var unpackFloat = require("glsl-read-float");
 var splitVolume = require("./split-volume");
 
