@@ -444,21 +444,6 @@ body {
   margin: 0;
   height: 100%;
   background: #111;
-  font-size: 85%;
-}
-
-h4 {
-  margin: 0;
-}
-
-* + h4 {
-  margin-top: 1em;
-}
-
-ul {
-  list-style-type: none;
-  padding: 0;
-  margin: 0;
 }
 
 .visuallyhidden {
@@ -489,6 +474,7 @@ ul {
   flex-grow: 1;
   height: 0;
   min-height: 200px;
+  font-size: 80%;
 }
 
 .CodeMirror {
@@ -529,8 +515,38 @@ ul {
   display: block;
 }
 
+/* Editor
+   ========================================================================== */
+
+.CodeMirror {
+  font-size: 13px !important;
+}
+
 /* Process controls
    ========================================================================== */
+
+.controls {
+  font-size: 12px;
+}
+
+.controls h4 {
+  margin: 0;
+  font-size: inherit;
+}
+
+.controls * + h4 {
+  margin-top: 12px;
+}
+
+.controls ul {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+}
+
+.control-heading {
+  font-size: 14px;
+}
 
 .btn {
   margin-top: 12px;
@@ -540,6 +556,7 @@ ul {
   background: #33554f;
   color: #eee;
   padding: 12px;
+  font-size: 12px;
 }
 
 .progress {
