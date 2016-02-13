@@ -146,11 +146,13 @@ CubeMarch.prototype.marchVolume = function(config) {
 };
 
 CubeMarch.prototype.abort = function() {
+    this.aborting = true;
     this.workerPool.abort();
 };
 
 CubeMarch.prototype.march = function(config) {
 
+    this.aborting = false;
     this.cubesMarched = 0;
     var gl = this.scene.gl;
 
@@ -170,6 +172,10 @@ CubeMarch.prototype.march = function(config) {
     var volumeIndex = 0;
 
     var nextVolume = function() {
+        if (this.aborting) {
+            return;
+        }
+
         if (volumeIndex >= this.volumes.length) {
             config.hasOwnProperty('onDone') && config.onDone();
             return;
