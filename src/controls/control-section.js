@@ -43,6 +43,9 @@ ProcessControls.prototype.init = function() {
 };
 
 ProcessControls.prototype.onResolutionUpdate = function(value, old, keypath) {
+    if (value == undefined) {
+        return;
+    }
     if (this.ractive.get(this.ns('proportional'))) {
         var component = keypath.split('.').pop();
         this.setProportionalResolution(value, component);
@@ -56,8 +59,11 @@ ProcessControls.prototype.onProportionalUpdate = function(value) {
 };
 
 ProcessControls.prototype.onBoundingUpdate = function(value, old, keypath) {
+    if (value == undefined) {
+        return;
+    }
     if (this.ractive.get(this.ns('proportional'))) {
-        var bound = keypath.split('.').pop()
+        var bound = keypath.split('.').pop();
         var nonCorrespondingComponent = {'height': 'x', 'depth': 'y', 'width': 'z'}[bound];
         this.forceProportions(nonCorrespondingComponent);
     }
