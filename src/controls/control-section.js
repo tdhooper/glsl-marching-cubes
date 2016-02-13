@@ -37,6 +37,25 @@ ProcessControls.prototype.init = function() {
     ControlSection.prototype.init.call(this);
     this.ractive.on(this.ns('start'), this.start.bind(this));
     this.ractive.on(this.ns('cancel'), this.cancel.bind(this));
+    this.ractive.observe(this.ns('resolution.*'), this.onResolutionUpdate.bind(this));
+    this.ractive.observe(this.ns('equal'), this.onEqualUpdate.bind(this));
+};
+
+ProcessControls.prototype.onResolutionUpdate = function(value) {
+    if (this.ractive.get(this.ns('equal'))) {
+        this.ractive.set(this.ns('resolution.x'), value);
+        this.ractive.set(this.ns('resolution.y'), value);
+        this.ractive.set(this.ns('resolution.z'), value);
+    }
+};
+
+ProcessControls.prototype.onEqualUpdate = function(value) {
+    if (value) {
+        first = this.ractive.get(this.ns('resolution.x'));
+        this.ractive.set(this.ns('resolution.x'), first);
+        this.ractive.set(this.ns('resolution.y'), first);
+        this.ractive.set(this.ns('resolution.z'), first);
+    }
 };
 
 ProcessControls.prototype.done = function() {

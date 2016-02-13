@@ -9,28 +9,31 @@
             <h4>Position</h4>
             <ul>
                 <li class="control">
-                    <label class="control-label" for="bounding-x">x</label>
+                    <label class="control-label visuallyhidden" for="bounding-x">x</label>
                     <input
                         class="control-input control-input--narrow"
                         id="bounding-x"
                         type="number"
+                        step=".1"
                         value="{{ bounding.position.x }}"
                     >
                 </li>
                 <li class="control">
-                    <label class="control-label" for="bounding-y">y</label>
+                    <label class="control-label visuallyhidden" for="bounding-y">y</label>
                     <input
                         class="control-input control-input--narrow"
                         id="bounding-y"
                         type="number"
+                        step=".1"
                         value="{{ bounding.position.y }}"
                     >
                 <li class="control">
-                    <label class="control-label" for="bounding-z">z</label>
+                    <label class="control-label visuallyhidden" for="bounding-z">z</label>
                     <input
                         class="control-input control-input--narrow"
                         id="bounding-z"
                         type="number"
+                        step=".1"
                         value="{{ bounding.position.z }}"
                     >
                 </li>
@@ -41,28 +44,31 @@
             <h4>Size</h4>
             <ul>
                 <li class="control">
-                    <label class="control-label" for="bounding-w">w</label>
+                    <label class="control-label visuallyhidden" for="bounding-w">w</label>
                     <input
                         class="control-input control-input--narrow"
                         id="bounding-w"
                         type="number"
+                        step=".1"
                         value="{{ bounding.size.width }}"
                     >
                 </li>
                 <li class="control">
-                    <label class="control-label" for="bounding-h">h</label>
+                    <label class="control-label visuallyhidden" for="bounding-h">h</label>
                     <input
                         class="control-input control-input--narrow"
                         id="bounding-h"
                         type="number"
+                        step=".1"
                         value="{{ bounding.size.height }}"
                     >
                 <li class="control">
-                    <label class="control-label" for="bounding-d">d</label>
+                    <label class="control-label visuallyhidden" for="bounding-d">d</label>
                     <input
                         class="control-input control-input--narrow"
                         id="bounding-d"
                         type="number"
+                        step=".1"
                         value="{{ bounding.size.depth }}"
                     >
                 </li>
@@ -71,16 +77,44 @@
     </fieldset>
 
     <fieldset class="control-section control-section--preview">
-        <h3 class="control-heading">Preview</h3>
+        <h3 class="control-heading">Preview resolution</h3>
         <div class="control">
-            <label class="control-label" for="preview-resolution">Resolution</label>
             <input
-                class="control-input"
-                id="preview-resolution"
-                type="number"
-                value="{{ preview.resolution }}"
+                class="control-checkbox"
+                id="preview-equal"
+                type="checkbox"
+                checked="{{ preview.equal }}"
             >
+            <label class="control-label" for="preview-equal">Equal</label>
         </div>
+        <ul class="control-group--horizontal">
+            <li class="control">
+                <label class="control-label visuallyhidden" for="preview-x">x</label>
+                <input
+                    class="control-input control-input--narrow"
+                    id="preview-x"
+                    type="number"
+                    value="{{ preview.resolution.x }}"
+                >
+            </li>
+            <li class="control">
+                <label class="control-label visuallyhidden" for="preview-y">y</label>
+                <input
+                    class="control-input control-input--narrow"
+                    id="preview-y"
+                    type="number"
+                    value="{{ preview.resolution.y }}"
+                >
+            <li class="control">
+                <label class="control-label visuallyhidden" for="preview-z">z</label>
+                <input
+                    class="control-input control-input--narrow"
+                    id="preview-z"
+                    type="number"
+                    value="{{ preview.resolution.z }}"
+                >
+            </li>
+        </ul>
         <button
             class="btn"
             on-click="preview.start"
@@ -96,14 +130,42 @@
     <fieldset class="control-section control-section--download">
         <h3 class="control-heading">Download</h3>
         <div class="control">
-            <label class="control-label" for="preview-resolution">Resolution</label>
             <input
-                class="control-input"
-                id="preview-resolution"
-                type="number"
-                value="{{ download.resolution }}"
+                class="control-checkbox"
+                id="download-equal"
+                type="checkbox"
+                checked="{{ download.equal }}"
             >
+            <label class="control-label" for="download-equal">Equal</label>
         </div>
+        <ul class="control-group--horizontal">
+            <li class="control">
+                <label class="control-label visuallyhidden" for="download-x">x</label>
+                <input
+                    class="control-input control-input--narrow"
+                    id="download-x"
+                    type="number"
+                    value="{{ download.resolution.x }}"
+                >
+            </li>
+            <li class="control">
+                <label class="control-label visuallyhidden" for="download-y">y</label>
+                <input
+                    class="control-input control-input--narrow"
+                    id="download-y"
+                    type="number"
+                    value="{{ download.resolution.y }}"
+                >
+            <li class="control">
+                <label class="control-label visuallyhidden" for="download-z">z</label>
+                <input
+                    class="control-input control-input--narrow"
+                    id="download-z"
+                    type="number"
+                    value="{{ download.resolution.z }}"
+                >
+            </li>
+        </ul>
         <button
             class="btn"
             on-click="download.start"

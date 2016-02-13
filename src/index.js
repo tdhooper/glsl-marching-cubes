@@ -29,10 +29,20 @@ window.addEventListener('resize', editor.resize.bind(editor), false);
 var state = {
     progress: 'Ready',
     preview: {
-        resolution: 50
+        equal: true,
+        resolution: {
+            x: 50,
+            y: 50,
+            z: 50
+        }
     },
     download: {
-        resolution: 500
+        equal: true,
+        resolution: {
+            x: 500,
+            y: 500,
+            z: 500
+        }
     },
     bounding: {
         position: {

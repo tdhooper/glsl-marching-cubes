@@ -22,6 +22,17 @@ ul {
     margin: 0;
 }
 
+.visuallyhidden {
+    border: 0;
+    clip: rect(0 0 0 0);
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    width: 1px;
+}
+
 
 /* Layout
    ========================================================================== */
@@ -85,7 +96,7 @@ ul {
    ========================================================================== */
 
 .btn {
-    margin-top: 6px;
+    margin-top: 12px;
 }
 
 .controls {
@@ -108,8 +119,8 @@ ul {
     padding: 0;
     margin: 0;
 
-    width: 40%;
-    min-width: 220px;
+    width: 33.333%;
+    min-width: 170px;
     box-sizing: border-box;
     float: left;
 
@@ -149,9 +160,12 @@ ul {
     margin-top: 1em;
 }
 
+.control-label {
+    margin-right: 3px;
+}
+
 .control-input {
     width: 100px;
-    margin-left: 3px;
 }
 
 .control-input--narrow {

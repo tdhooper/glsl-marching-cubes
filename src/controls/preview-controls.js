@@ -21,9 +21,14 @@ PreviewControls.prototype.update = function(data) {
 PreviewControls.prototype.start = function() {
     ProcessControls.prototype.start.call(this);
     this.cubeMarch.abort();
-    var dd = parseInt(this.ractive.get('preview.resolution'), 10);
+    var res = this.ractive.get(this.ns('resolution'));
+    var dims = [
+        parseInt(res.x, 10),
+        parseInt(res.y, 10),
+        parseInt(res.z, 10)
+    ];
     var bounds = this.ractive.get('bounds');
-    this.cubeMarch.setVolume([dd, dd, dd], bounds);
+    this.cubeMarch.setVolume(dims, bounds);
     this.renderer.startModel();
 
     this.cubeMarch.march({

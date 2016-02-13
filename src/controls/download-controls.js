@@ -27,8 +27,12 @@ DownloadControls.prototype.start = function() {
     ProcessControls.prototype.start.call(this);
 
     this.cubeMarch.abort();
-    var dd = parseInt(this.ractive.get('download.resolution'), 10);
-    var dims = [dd, dd, dd];
+    var res = this.ractive.get(this.ns('resolution'));
+    var dims = [
+        parseInt(res.x, 10),
+        parseInt(res.y, 10),
+        parseInt(res.z, 10)
+    ];
     var bounds = this.ractive.get('bounds');
     this.cubeMarch.setVolume(dims, bounds);
     var filename = [
