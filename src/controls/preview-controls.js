@@ -44,4 +44,14 @@ PreviewControls.prototype.cancel =function() {
     this.cubeMarch.abort();
 };
 
+PreviewControls.prototype.progressMessage = function(cubesMarched, totalCubes) {
+    var message = ProcessControls.prototype.progressMessage.call(this, cubesMarched, totalCubes);
+    return 'Rendering preview: ' + message;
+};
+
+PreviewControls.prototype.doneMessage = function() {
+    var message = ProcessControls.prototype.doneMessage.call(this);
+    return 'Render ' + message;
+};
+
 module.exports = PreviewControls;

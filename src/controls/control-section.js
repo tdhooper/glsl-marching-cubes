@@ -81,23 +81,58 @@ ProcessControls.prototype.boundForComp = function(component) {
 };
 
 ProcessControls.prototype.done = function() {
+    this.ractive.set('progress', this.doneMessage());
     this.ractive.set(this.ns('showCancel'), false);
     this.ractive.fire('ready');
 };
 
 ProcessControls.prototype.start = function() {
+    this.startTime = new Date().getTime();
     this.ractive.set(this.ns('showCancel'), true);
     this.ractive.fire('busy', this);
 };
 
 ProcessControls.prototype.cancel = function() {
-    this.ractive.set('progress', '');
+    this.ractive.set('progress', 'Ready');
     this.ractive.set(this.ns('showCancel'), false);
     this.ractive.fire('ready');
 };
 
 ProcessControls.prototype.progress = function(cubesMarched, totalCubes) {
-    this.ractive.set('progress', ((cubesMarched / totalCubes) * 100).toFixed(2) + '% complete');
+    this.ractive.set('progress', this.progressMessage(cubesMarched, totalCubes));
+};
+
+ProcessControls.prototype.progressMessage = function(cubesMarched, totalCubes) {
+    var duration = this.formatDuration(this.startTime, new Date().getTime());
+    return [
+        '<strong>',
+        ((cubesMarched / totalCubes) * 100).toFixed(2),
+        '%</strong> complete, running for ',
+        duration
+    ].join('');
+};
+
+ProcessControls.prototype.doneMessage = function() {
+    var duration = this.formatDuration(this.startTime, new Date().getTime());
+    return 'completed in ' + duration;
+};
+
+ProcessControls.prototype.formatDuration = function(start, end) {
+    var d = new Date(end - start);
+    var values = [
+        d.getHours(),
+        d.getMinutes(),
+        d.getSeconds(),
+        d.getMilliseconds()
+    ]
+    values = values.reduce(function(prev, current, index, arr) {
+        return prev ? prev : current ? arr.slice(index) : null;
+    });
+    values = values.reverse().map(function(value, index) {
+        var unit = ['ms', 's', 'm', 'h'];
+        return '<strong>' + value + '</strong>' + unit[index]
+    }).reverse();
+    return values.join(' ');
 };
 
 module.exports.ControlSection = ControlSection;

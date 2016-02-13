@@ -55,4 +55,14 @@ DownloadControls.prototype.cancel =function() {
     this.cubeMarch.abort();
 };
 
+DownloadControls.prototype.progressMessage = function(cubesMarched, totalCubes) {
+    var message = ProcessControls.prototype.progressMessage.call(this, cubesMarched, totalCubes);
+    return 'Generating STL: ' + message;
+};
+
+DownloadControls.prototype.doneMessage = function() {
+    var message = ProcessControls.prototype.doneMessage.call(this);
+    return 'STL generation' + message;
+};
+
 module.exports = DownloadControls;
