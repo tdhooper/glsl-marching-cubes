@@ -15,9 +15,7 @@ ControlSection.prototype = {
     },
 
     busyHandler: function(control) {
-        if (control !== this) {
-            this.ractive.set(this.ns('disable'), true);
-        }
+        this.ractive.set(this.ns('disable'), true);
     },
 
     readyHandler: function() {
