@@ -26,7 +26,8 @@ CubeMarch.prototype.setVolume = function(dims, bounds) {
     var size = Math.ceil(Math.sqrt(vertexCount));
     scene.resize(size, size);
     var maxSize = scene.gl.drawingBufferWidth;
-    // maxSize = 100;
+    // maxSize /= 2;
+    // maxSize = 60;
 
     var volume = { dims: dims, bounds: bounds };
     this.volumes = splitVolume(volume, maxSize);
@@ -79,15 +80,26 @@ CubeMarch.prototype.calcPotentials = function(volumeIndex, pixels, uniforms) {
         pixels
     );
 
+    var previousValue;
+    var containsGeometry = false;
+
     for (i = 0; i < volume.vertexCount; i++) {
         r = pixels[i * 4 + 0];
         g = pixels[i * 4 + 1];
         b = pixels[i * 4 + 2];
         a = pixels[i * 4 + 3];
         value = unpackFloat(r, g, b, a);
+        if ( ! containsGeometry && previousValue && (value > 0) !== (previousValue > 0)) {
+            containsGeometry = true;
+        }
+        previousValue = value;
         for (bl = 0; bl < this.numWorkers; bl++) {
             blockPotentials[bl][i] = value;
         }
+    }
+
+    if ( ! containsGeometry) {
+        return;
     }
 
     return blockPotentialBuffers;
@@ -164,6 +176,15 @@ CubeMarch.prototype.march = function(config) {
         }
 
         blockPotentialBuffers = this.calcPotentials(volumeIndex, pixels, uniforms);
+        if ( ! blockPotentialBuffers) {
+            var volume = this.volumes[volumeIndex];
+            var cubes = volume.dims[0] * volume.dims[1] * volume.dims[2];
+            this.cubesMarched += cubes;
+            config.onProgress(this.cubesMarched, this.totalCubes);
+            volumeIndex += 1;
+            setTimeout(nextVolume.bind(this), 100);
+            return;
+        }
 
         this.marchVolume({
             volumeIndex: volumeIndex,
