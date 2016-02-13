@@ -461,7 +461,35 @@ ul {
   margin: 0;
 }
 
-#background,
+/* Layout
+   ========================================================================== */
+
+.ui {
+  display: flex;
+  flex-direction: column;
+  position: absolute;
+  width: 40%;
+  min-height: 100%;
+}
+
+.editor {
+  position: relative;
+  overflow: hidden;
+  flex-grow: 1;
+  height: 0;
+  min-height: 200px;
+}
+
+.CodeMirror {
+  height: 100% !important;
+  width: 100% !important;
+  position: absolute !important;
+}
+
+.controls {
+  flex-grow: 0;
+}
+
 #scene,
 #ui {
   margin-top: 0;
@@ -473,48 +501,54 @@ ul {
   left: 0;
 }
 
+#scene {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 60%;
+  height: 100%;
+}
+
 #scene canvas {
   position: absolute;
   top: 0;
   left: 0;
-  height: 100% !important;
   width: 100% !important;
+  height: 100% !important;
   display: block;
 }
 
+/* Process controls
+   ========================================================================== */
+
 .btn {
-  margin-top: 1em;
+  margin-top: 6px;
 }
 
 .controls {
-  background: black;
-  position: fixed;
-  right: 0;
-  top: 0;
+  background: #33554f;
   color: #eee;
-  width: 250px;
-  padding: 1em;
+  padding: 12px;
 }
 
 .progress {
   margin: 0;
-  padding: 20px;
+  padding: 12px;
+  margin: -12px;
+  margin-bottom: 24px;
+  background: #48b685;
+  color: #2F1E2E;
 }
 
 .control-section {
   border: none;
   padding: 0;
   margin: 0;
-  border-top: 3px solid #333;
-  padding-top: 1em;
-}
-
-* + .control-section {
-  margin-top: 1em;
-}
-
-.control-section--disabled {
-  color: #666;
+  width: 40%;
+  min-width: 220px;
+  box-sizing: border-box;
+  float: left;
+  margin-bottom: 24px;
 }
 
 * + .control-group {
@@ -561,9 +595,17 @@ ul {
 
 input,
 button {
-  background: #333;
   border: none;
   padding: 6px;
+}
+
+input {
+  background: #437568;
+}
+
+button {
+  background: #fec418;
+  color: #2F1E2E;
 }
 
 input[type=number] {
