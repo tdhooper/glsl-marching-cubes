@@ -62,7 +62,7 @@ DownloadControls.prototype.progressMessage = function(cubesMarched, totalCubes) 
 
 DownloadControls.prototype.doneMessage = function() {
     var message = ProcessControls.prototype.doneMessage.call(this);
-    return 'STL generation' + message;
+    return 'STL generation ' + message;
 };
 
 module.exports = DownloadControls;
