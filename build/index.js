@@ -77844,6 +77844,25 @@ ProcessControls.prototype.init = function() {
     ControlSection.prototype.init.call(this);
     this.ractive.on(this.ns('start'), this.start.bind(this));
     this.ractive.on(this.ns('cancel'), this.cancel.bind(this));
+    this.ractive.observe(this.ns('resolution.*'), this.onResolutionUpdate.bind(this));
+    this.ractive.observe(this.ns('equal'), this.onEqualUpdate.bind(this));
+};
+
+ProcessControls.prototype.onResolutionUpdate = function(value) {
+    if (this.ractive.get(this.ns('equal'))) {
+        this.ractive.set(this.ns('resolution.x'), value);
+        this.ractive.set(this.ns('resolution.y'), value);
+        this.ractive.set(this.ns('resolution.z'), value);
+    }
+};
+
+ProcessControls.prototype.onEqualUpdate = function(value) {
+    if (value) {
+        first = this.ractive.get(this.ns('resolution.x'));
+        this.ractive.set(this.ns('resolution.x'), first);
+        this.ractive.set(this.ns('resolution.y'), first);
+        this.ractive.set(this.ns('resolution.z'), first);
+    }
 };
 
 ProcessControls.prototype.done = function() {
@@ -77899,8 +77918,12 @@ DownloadControls.prototype.start = function() {
     ProcessControls.prototype.start.call(this);
 
     this.cubeMarch.abort();
-    var dd = parseInt(this.ractive.get('download.resolution'), 10);
-    var dims = [dd, dd, dd];
+    var res = this.ractive.get(this.ns('resolution'));
+    var dims = [
+        parseInt(res.x, 10),
+        parseInt(res.y, 10),
+        parseInt(res.z, 10)
+    ];
     var bounds = this.ractive.get('bounds');
     this.cubeMarch.setVolume(dims, bounds);
     var filename = [
@@ -77949,9 +77972,14 @@ PreviewControls.prototype.update = function(data) {
 PreviewControls.prototype.start = function() {
     ProcessControls.prototype.start.call(this);
     this.cubeMarch.abort();
-    var dd = parseInt(this.ractive.get('preview.resolution'), 10);
+    var res = this.ractive.get(this.ns('resolution'));
+    var dims = [
+        parseInt(res.x, 10),
+        parseInt(res.y, 10),
+        parseInt(res.z, 10)
+    ];
     var bounds = this.ractive.get('bounds');
-    this.cubeMarch.setVolume([dd, dd, dd], bounds);
+    this.cubeMarch.setVolume(dims, bounds);
     this.renderer.startModel();
 
     this.cubeMarch.march({
@@ -78185,10 +78213,20 @@ window.addEventListener('resize', editor.resize.bind(editor), false);
 var state = {
     progress: 'Ready',
     preview: {
-        resolution: 50
+        equal: true,
+        resolution: {
+            x: 50,
+            y: 50,
+            z: 50
+        }
     },
     download: {
-        resolution: 500
+        equal: true,
+        resolution: {
+            x: 500,
+            y: 500,
+            z: 500
+        }
     },
     bounding: {
         position: {
@@ -78208,7 +78246,7 @@ var cubeMarch = new CubeMarch();
 var exporter = new STLExporter();
 var renderer = new Renderer(document.getElementById('scene'));
 
-var template = "<div class=\"controls\">\n\n    <p class=\"progress\">{{ progress }}</p>\n\n    <fieldset class=\"control-section\">\n        <h3 class=\"control-heading\">Bounding box</h3>\n\n        <div class=\"control-group control-group--horizontal\">\n            <h4>Position</h4>\n            <ul>\n                <li class=\"control\">\n                    <label class=\"control-label\" for=\"bounding-x\">x</label>\n                    <input\n                        class=\"control-input control-input--narrow\"\n                        id=\"bounding-x\"\n                        type=\"number\"\n                        value=\"{{ bounding.position.x }}\"\n                    >\n                </li>\n                <li class=\"control\">\n                    <label class=\"control-label\" for=\"bounding-y\">y</label>\n                    <input\n                        class=\"control-input control-input--narrow\"\n                        id=\"bounding-y\"\n                        type=\"number\"\n                        value=\"{{ bounding.position.y }}\"\n                    >\n                <li class=\"control\">\n                    <label class=\"control-label\" for=\"bounding-z\">z</label>\n                    <input\n                        class=\"control-input control-input--narrow\"\n                        id=\"bounding-z\"\n                        type=\"number\"\n                        value=\"{{ bounding.position.z }}\"\n                    >\n                </li>\n            </ul>\n        </div>\n\n        <div class=\"control-group control-group--horizontal\">\n            <h4>Size</h4>\n            <ul>\n                <li class=\"control\">\n                    <label class=\"control-label\" for=\"bounding-w\">w</label>\n                    <input\n                        class=\"control-input control-input--narrow\"\n                        id=\"bounding-w\"\n                        type=\"number\"\n                        value=\"{{ bounding.size.width }}\"\n                    >\n                </li>\n                <li class=\"control\">\n                    <label class=\"control-label\" for=\"bounding-h\">h</label>\n                    <input\n                        class=\"control-input control-input--narrow\"\n                        id=\"bounding-h\"\n                        type=\"number\"\n                        value=\"{{ bounding.size.height }}\"\n                    >\n                <li class=\"control\">\n                    <label class=\"control-label\" for=\"bounding-d\">d</label>\n                    <input\n                        class=\"control-input control-input--narrow\"\n                        id=\"bounding-d\"\n                        type=\"number\"\n                        value=\"{{ bounding.size.depth }}\"\n                    >\n                </li>\n            </ul>\n        </div>\n    </fieldset>\n\n    <fieldset class=\"control-section control-section--preview\">\n        <h3 class=\"control-heading\">Preview</h3>\n        <div class=\"control\">\n            <label class=\"control-label\" for=\"preview-resolution\">Resolution</label>\n            <input\n                class=\"control-input\"\n                id=\"preview-resolution\"\n                type=\"number\"\n                value=\"{{ preview.resolution }}\"\n            >\n        </div>\n        <button\n            class=\"btn\"\n            on-click=\"preview.start\"\n            {{#if preview.disable }}\n                disabled\n            {{/if}}\n        >Render</button>\n        {{#if preview.showCancel }}\n            <button class=\"btn\" on-click=\"preview.cancel\">Cancel</button>\n        {{/if}}\n    </fieldset>\n\n    <fieldset class=\"control-section control-section--download\">\n        <h3 class=\"control-heading\">Download</h3>\n        <div class=\"control\">\n            <label class=\"control-label\" for=\"preview-resolution\">Resolution</label>\n            <input\n                class=\"control-input\"\n                id=\"preview-resolution\"\n                type=\"number\"\n                value=\"{{ download.resolution }}\"\n            >\n        </div>\n        <button\n            class=\"btn\"\n            on-click=\"download.start\"\n            {{#if download.disable }}\n                disabled\n            {{/if}}\n        >Generate</button>\n        {{#if download.showCancel }}\n            <button class=\"btn\" on-click=\"download.cancel\">Cancel</button>\n        {{/if}}\n    </fieldset>\n</div>\n";
+var template = "<div class=\"controls\">\n\n    <p class=\"progress\">{{ progress }}</p>\n\n    <fieldset class=\"control-section\">\n        <h3 class=\"control-heading\">Bounding box</h3>\n\n        <div class=\"control-group control-group--horizontal\">\n            <h4>Position</h4>\n            <ul>\n                <li class=\"control\">\n                    <label class=\"control-label visuallyhidden\" for=\"bounding-x\">x</label>\n                    <input\n                        class=\"control-input control-input--narrow\"\n                        id=\"bounding-x\"\n                        type=\"number\"\n                        step=\".1\"\n                        value=\"{{ bounding.position.x }}\"\n                    >\n                </li>\n                <li class=\"control\">\n                    <label class=\"control-label visuallyhidden\" for=\"bounding-y\">y</label>\n                    <input\n                        class=\"control-input control-input--narrow\"\n                        id=\"bounding-y\"\n                        type=\"number\"\n                        step=\".1\"\n                        value=\"{{ bounding.position.y }}\"\n                    >\n                <li class=\"control\">\n                    <label class=\"control-label visuallyhidden\" for=\"bounding-z\">z</label>\n                    <input\n                        class=\"control-input control-input--narrow\"\n                        id=\"bounding-z\"\n                        type=\"number\"\n                        step=\".1\"\n                        value=\"{{ bounding.position.z }}\"\n                    >\n                </li>\n            </ul>\n        </div>\n\n        <div class=\"control-group control-group--horizontal\">\n            <h4>Size</h4>\n            <ul>\n                <li class=\"control\">\n                    <label class=\"control-label visuallyhidden\" for=\"bounding-w\">w</label>\n                    <input\n                        class=\"control-input control-input--narrow\"\n                        id=\"bounding-w\"\n                        type=\"number\"\n                        step=\".1\"\n                        value=\"{{ bounding.size.width }}\"\n                    >\n                </li>\n                <li class=\"control\">\n                    <label class=\"control-label visuallyhidden\" for=\"bounding-h\">h</label>\n                    <input\n                        class=\"control-input control-input--narrow\"\n                        id=\"bounding-h\"\n                        type=\"number\"\n                        step=\".1\"\n                        value=\"{{ bounding.size.height }}\"\n                    >\n                <li class=\"control\">\n                    <label class=\"control-label visuallyhidden\" for=\"bounding-d\">d</label>\n                    <input\n                        class=\"control-input control-input--narrow\"\n                        id=\"bounding-d\"\n                        type=\"number\"\n                        step=\".1\"\n                        value=\"{{ bounding.size.depth }}\"\n                    >\n                </li>\n            </ul>\n        </div>\n    </fieldset>\n\n    <fieldset class=\"control-section control-section--preview\">\n        <h3 class=\"control-heading\">Preview resolution</h3>\n        <div class=\"control\">\n            <input\n                class=\"control-checkbox\"\n                id=\"preview-equal\"\n                type=\"checkbox\"\n                checked=\"{{ preview.equal }}\"\n            >\n            <label class=\"control-label\" for=\"preview-equal\">Equal</label>\n        </div>\n        <ul class=\"control-group--horizontal\">\n            <li class=\"control\">\n                <label class=\"control-label visuallyhidden\" for=\"preview-x\">x</label>\n                <input\n                    class=\"control-input control-input--narrow\"\n                    id=\"preview-x\"\n                    type=\"number\"\n                    value=\"{{ preview.resolution.x }}\"\n                >\n            </li>\n            <li class=\"control\">\n                <label class=\"control-label visuallyhidden\" for=\"preview-y\">y</label>\n                <input\n                    class=\"control-input control-input--narrow\"\n                    id=\"preview-y\"\n                    type=\"number\"\n                    value=\"{{ preview.resolution.y }}\"\n                >\n            <li class=\"control\">\n                <label class=\"control-label visuallyhidden\" for=\"preview-z\">z</label>\n                <input\n                    class=\"control-input control-input--narrow\"\n                    id=\"preview-z\"\n                    type=\"number\"\n                    value=\"{{ preview.resolution.z }}\"\n                >\n            </li>\n        </ul>\n        <button\n            class=\"btn\"\n            on-click=\"preview.start\"\n            {{#if preview.disable }}\n                disabled\n            {{/if}}\n        >Render</button>\n        {{#if preview.showCancel }}\n            <button class=\"btn\" on-click=\"preview.cancel\">Cancel</button>\n        {{/if}}\n    </fieldset>\n\n    <fieldset class=\"control-section control-section--download\">\n        <h3 class=\"control-heading\">Download</h3>\n        <div class=\"control\">\n            <input\n                class=\"control-checkbox\"\n                id=\"download-equal\"\n                type=\"checkbox\"\n                checked=\"{{ download.equal }}\"\n            >\n            <label class=\"control-label\" for=\"download-equal\">Equal</label>\n        </div>\n        <ul class=\"control-group--horizontal\">\n            <li class=\"control\">\n                <label class=\"control-label visuallyhidden\" for=\"download-x\">x</label>\n                <input\n                    class=\"control-input control-input--narrow\"\n                    id=\"download-x\"\n                    type=\"number\"\n                    value=\"{{ download.resolution.x }}\"\n                >\n            </li>\n            <li class=\"control\">\n                <label class=\"control-label visuallyhidden\" for=\"download-y\">y</label>\n                <input\n                    class=\"control-input control-input--narrow\"\n                    id=\"download-y\"\n                    type=\"number\"\n                    value=\"{{ download.resolution.y }}\"\n                >\n            <li class=\"control\">\n                <label class=\"control-label visuallyhidden\" for=\"download-z\">z</label>\n                <input\n                    class=\"control-input control-input--narrow\"\n                    id=\"download-z\"\n                    type=\"number\"\n                    value=\"{{ download.resolution.z }}\"\n                >\n            </li>\n        </ul>\n        <button\n            class=\"btn\"\n            on-click=\"download.start\"\n            {{#if download.disable }}\n                disabled\n            {{/if}}\n        >Generate</button>\n        {{#if download.showCancel }}\n            <button class=\"btn\" on-click=\"download.cancel\">Cancel</button>\n        {{/if}}\n    </fieldset>\n</div>\n";
 var ractive = new Ractive({
     el: document.getElementById('main'),
     append: true,
@@ -78266,16 +78304,19 @@ var Renderer = function(el) {
 
     this.material = new THREE.MeshBasicMaterial({
         color: '#fff',
-        side: THREE.DoubleSide,
         wireframe: true
     });
 
     var axisHelper = new THREE.AxisHelper( 1 );
     scene.add( axisHelper );
 
-    var boundsGeometry = new THREE.BoxGeometry(1, 1, 1);
-    var boundsObj = new THREE.Mesh(boundsGeometry, this.material);
-    var bounds = new THREE.BoxHelper(boundsObj);
+    var boundsMaterial = new THREE.MeshBasicMaterial({
+        color: '#ff0',
+        wireframe: true
+    });
+
+    var boundsGeometry = new THREE.BoxGeometry(1, 1, 1, 5, 5, 5);
+    var bounds = new THREE.Mesh(boundsGeometry, boundsMaterial);
     scene.add(bounds);
 
     function render() {
