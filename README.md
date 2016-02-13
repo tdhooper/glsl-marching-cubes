@@ -22,5 +22,5 @@ I tried running the entire marching cubes algorithm on the GPU, but the cost and
 
 The JavaScript marching cubes implementation is based on <sup>[2](#fn2)</sup>, which actually runs much faster for simple models. I haven’t compared them with more complex models.
 
-* <span id="fn1">1</span> https://github.com/mikolalysenko/isosurface
-* <span id=“fn2”>2</span> https://github.com/mikolalysenko/glsl-read-float
+* <a id="fn1">1</a> https://github.com/mikolalysenko/isosurface
+* <a id=“fn2”>2</a> https://github.com/mikolalysenko/glsl-read-float
