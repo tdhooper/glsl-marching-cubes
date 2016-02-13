@@ -57,36 +57,11 @@ var Renderer = function(el) {
         renderer.setSize(width, height);
     }
 
-    var projectId = window.location;
-
-    function storeControls() {
-        var state = JSON.stringify({
-            target: controls.target,
-            position: controls.object.position,
-            up: controls.object.up
-        })
-        sessionStorage.setItem(projectId + 'threecontrols', state);
-    }
-
-    function restoreControls() {
-        var state = sessionStorage.getItem(projectId + 'threecontrols');
-        state = JSON.parse(state);
-        // state = false;
-        if (state) {
-            controls.target0.copy(state.target);
-            controls.position0.copy(state.position);
-            controls.up0.copy(state.up);
-            controls.reset();    
-        }
-    }
-
     controls.addEventListener('change', function() {
         render();
-        storeControls();
     });
 
     window.addEventListener('resize', onWindowResize, false);
-    restoreControls();
     animate();
 
     this.sections = [];
