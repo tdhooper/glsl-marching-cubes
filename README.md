@@ -20,7 +20,7 @@ The volume to be marched is subdivided into blocks small enough to fit the maxim
 
 I tried running the entire marching cubes algorithm on the GPU, but the cost and difficulty of getting data back onto the CPU made it far too slow.
 
-The JavaScript marching cubes implementation is based on<sup>[2](#user-content-fn2)</sup>, which actually runs much faster for simple models. I haven’t compared them with more complex models.
+The JavaScript marching cubes implementation this is based on<sup>[2](#user-content-fn2)</sup> runs much faster for simple models. I haven’t compared them with more complex models.
 
 * <a id="fn1">1</a> https://github.com/mikolalysenko/isosurface
 * <a id=“fn2”>2</a> https://github.com/mikolalysenko/glsl-read-float
