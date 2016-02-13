@@ -7,14 +7,27 @@ var Ractive = require('ractive');
 var PreviewControls = require('./controls/preview-controls.js');
 var DownloadControls = require('./controls/download-controls.js');
 var BoundingControls = require('./controls/bounding-controls.js');
+var Editor = require('glsl-editor');
+var fs = require('fs');
 
-var s = 1;
-var bounds = [
-    [-s, -s, -s],
-    [s, s, s]
-];
+var example = fs.readFileSync(__dirname + '/shaders/example.glsl', 'utf8');
+var config = {
+    container: document.getElementById('main'),
+    value: example
+};
+
+var editor = Editor(config);
+editor.wrap.setAttribute('class', 'editor');
+
+// inline CSS styles into bundle:
+// both are optional.
+require('glsl-editor/css');
+require('glsl-editor/theme');
+
+window.addEventListener('resize', editor.resize.bind(editor), false);
 
 var state = {
+    progress: 'Ready',
     preview: {
         resolution: 50
     },
@@ -35,14 +48,14 @@ var state = {
     },
 };
 
-var cubeMarch = new CubeMarch(document.getElementById('background'));
+var cubeMarch = new CubeMarch();
 var exporter = new STLExporter();
 var renderer = new Renderer(document.getElementById('scene'));
 
-var fs = require('fs');
-var template = fs.readFileSync(__dirname + '/templates/ui.html', 'utf8');
+var template = fs.readFileSync(__dirname + '/templates/controls.html', 'utf8');
 var ractive = new Ractive({
-    el: '#ui',
+    el: document.getElementById('main'),
+    append: true,
     template: template,
     data: state,
     computed: {
@@ -62,8 +75,8 @@ var ractive = new Ractive({
 });
 
 
-var previewControls = new PreviewControls(cubeMarch, renderer, ractive);
-var downloadControls = new DownloadControls(cubeMarch, exporter, ractive);
+var previewControls = new PreviewControls(cubeMarch, renderer, editor, ractive);
+var downloadControls = new DownloadControls(cubeMarch, exporter, editor, ractive);
 var boundingControls = new BoundingControls(renderer, ractive);
 
 previewControls.init();

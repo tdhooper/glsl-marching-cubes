@@ -8,14 +8,11 @@ var R = require('ramda');
 var unpackFloat = require("glsl-read-float");
 var splitVolume = require("./split-volume");
 
-var CubeMarch = function(el) {
+var CubeMarch = function() {
     this.scene = new Scene(1, 1);
-    el && el.appendChild(this.scene.canvas);
 
-    this.potentialsProg = this.scene.createProgramInfo(
-        glslify('./shaders/shader.vert'),
-        glslify('./shaders/calc-potentials.frag')
-    );
+    this.shaderVert = glslify('./shaders/shader.vert');
+    this.calcPotentialsFrag = glslify('./shaders/calc-potentials.frag');
 
     this.startTime = new Date().getTime();
     this.numWorkers = 4;
@@ -144,6 +141,11 @@ CubeMarch.prototype.march = function(config) {
 
     this.cubesMarched = 0;
     var gl = this.scene.gl;
+
+    this.potentialsProg = this.scene.createProgramInfo(
+        this.shaderVert,
+        this.calcPotentialsFrag.replace('INSERT_MAP_DISTANCE', config.mapDistance)
+    );
 
     var uniforms = {
         time: new Date().getTime() - this.startTime

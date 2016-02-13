@@ -1,9 +1,10 @@
 var ProcessControls = require('./control-section.js').ProcessControls;
 
-var PreviewControls = function(cubeMarch, renderer, ractive) {
+var PreviewControls = function(cubeMarch, renderer, editor, ractive) {
     ProcessControls.call(this, ractive);
     this.renderer = renderer;
     this.cubeMarch = cubeMarch;
+    this.editor = editor;
 };
 
 PreviewControls.prototype = Object.create(ProcessControls.prototype);
@@ -24,10 +25,12 @@ PreviewControls.prototype.start = function() {
     var bounds = this.ractive.get('bounds');
     this.cubeMarch.setVolume([dd, dd, dd], bounds);
     this.renderer.startModel();
+
     this.cubeMarch.march({
         onSection: this.update.bind(this),
         onProgress: this.progress.bind(this),
-        onDone: this.done.bind(this)
+        onDone: this.done.bind(this),
+        mapDistance: this.editor.getValue()
     });
 };
 

@@ -1,5 +1,7 @@
 <div class="controls">
 
+    <p class="progress">{{ progress }}</p>
+
     <fieldset class="control-section">
         <h3 class="control-heading">Bounding box</h3>
 
@@ -68,7 +70,7 @@
         </div>
     </fieldset>
 
-    <fieldset class="control-section">
+    <fieldset class="control-section control-section--preview">
         <h3 class="control-heading">Preview</h3>
         <div class="control">
             <label class="control-label" for="preview-resolution">Resolution</label>
@@ -91,7 +93,7 @@
         {{/if}}
     </fieldset>
 
-    <fieldset class="control-section">
+    <fieldset class="control-section control-section--download">
         <h3 class="control-heading">Download</h3>
         <div class="control">
             <label class="control-label" for="preview-resolution">Resolution</label>
@@ -113,6 +115,4 @@
             <button class="btn" on-click="download.cancel">Cancel</button>
         {{/if}}
     </fieldset>
-
-    <p class="progress">{{ progress }}</p>
 </div>

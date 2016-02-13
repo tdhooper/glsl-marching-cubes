@@ -1,9 +1,10 @@
 var ProcessControls = require('./control-section.js').ProcessControls;
 
-var DownloadControls = function(cubeMarch, exporter, ractive) {
+var DownloadControls = function(cubeMarch, exporter, editor, ractive) {
     ProcessControls.call(this, ractive);
     this.exporter = exporter;
     this.cubeMarch = cubeMarch;
+    this.editor = editor;
 };
 
 DownloadControls.prototype = Object.create(ProcessControls.prototype);
@@ -36,10 +37,12 @@ DownloadControls.prototype.start = function() {
         dims[0] + 'x' + dims[1] + 'x' + dims[2]
     ].join('-');
     this.exporter.startModel(filename);
+
     this.cubeMarch.march({
         onSection: this.update.bind(this),
         onProgress: this.progress.bind(this),
-        onDone: this.done.bind(this)
+        onDone: this.done.bind(this),
+        mapDistance: this.editor.getValue()
     });
 };
 

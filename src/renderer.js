@@ -5,8 +5,8 @@ THREE.TrackballControls = require('three.trackball');
 
 var Renderer = function(el) {
 
-    var width = window.innerWidth;
-    var height = window.innerHeight;
+    var width = el.offsetWidth;
+    var height = el.offsetHeight;
 
     var camera = new THREE.PerspectiveCamera(45, width / height, 0.001, 1000);
     camera.position.z = 5;
@@ -47,8 +47,8 @@ var Renderer = function(el) {
     }
 
     function onWindowResize() {
-        width = window.innerWidth;
-        height = window.innerHeight;
+        width = el.offsetWidth;
+        height = el.offsetHeight;
         camera.aspect = width / height;
         camera.updateProjectionMatrix();
         renderer.setSize(width, height);
