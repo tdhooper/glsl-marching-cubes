@@ -70719,6 +70719,9 @@ STLExporter.prototype = {
 module.exports = STLExporter;
 
 },{"./stl-writer":27}],27:[function(require,module,exports){
+
+// Cribbed from http://buildaweso.me/project/2014/10/26/writing-binary-stl-files-from-threejs-objects
+
 var FileSaver = require("filesaver.js");
 
 var STLWriter = function() {}
