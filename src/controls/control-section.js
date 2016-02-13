@@ -130,7 +130,7 @@ ProcessControls.prototype.formatDuration = function(start, end) {
         d.getMilliseconds()
     ]
     values = values.reduce(function(prev, current, index, arr) {
-        return prev ? prev : current ? arr.slice(index) : null;
+        return prev.length ? prev : current ? arr.slice(index) : [];
     });
     values = values.reverse().map(function(value, index) {
         var unit = ['ms', 's', 'm', 'h'];
