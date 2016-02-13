@@ -77822,9 +77822,7 @@ ControlSection.prototype = {
     },
 
     busyHandler: function(control) {
-        if (control !== this) {
-            this.ractive.set(this.ns('disable'), true);
-        }
+        this.ractive.set(this.ns('disable'), true);
     },
 
     readyHandler: function() {
@@ -77850,6 +77848,9 @@ ProcessControls.prototype.init = function() {
 };
 
 ProcessControls.prototype.onResolutionUpdate = function(value, old, keypath) {
+    if (value == undefined) {
+        return;
+    }
     if (this.ractive.get(this.ns('proportional'))) {
         var component = keypath.split('.').pop();
         this.setProportionalResolution(value, component);
@@ -77863,8 +77864,11 @@ ProcessControls.prototype.onProportionalUpdate = function(value) {
 };
 
 ProcessControls.prototype.onBoundingUpdate = function(value, old, keypath) {
+    if (value == undefined) {
+        return;
+    }
     if (this.ractive.get(this.ns('proportional'))) {
-        var bound = keypath.split('.').pop()
+        var bound = keypath.split('.').pop();
         var nonCorrespondingComponent = {'height': 'x', 'depth': 'y', 'width': 'z'}[bound];
         this.forceProportions(nonCorrespondingComponent);
     }
@@ -78010,7 +78014,7 @@ DownloadControls.prototype.progressMessage = function(cubesMarched, totalCubes) 
 
 DownloadControls.prototype.doneMessage = function() {
     var message = ProcessControls.prototype.doneMessage.call(this);
-    return 'STL generation' + message;
+    return 'STL generation ' + message;
 };
 
 module.exports = DownloadControls;
@@ -78103,7 +78107,8 @@ CubeMarch.prototype.setVolume = function(dims, bounds) {
     var size = Math.ceil(Math.sqrt(vertexCount));
     scene.resize(size, size);
     var maxSize = scene.gl.drawingBufferWidth;
-    // maxSize = 100;
+    // maxSize /= 2;
+    // maxSize = 60;
 
     var volume = { dims: dims, bounds: bounds };
     this.volumes = splitVolume(volume, maxSize);
@@ -78156,15 +78161,26 @@ CubeMarch.prototype.calcPotentials = function(volumeIndex, pixels, uniforms) {
         pixels
     );
 
+    var previousValue;
+    var containsGeometry = false;
+
     for (i = 0; i < volume.vertexCount; i++) {
         r = pixels[i * 4 + 0];
         g = pixels[i * 4 + 1];
         b = pixels[i * 4 + 2];
         a = pixels[i * 4 + 3];
         value = unpackFloat(r, g, b, a);
+        if ( ! containsGeometry && previousValue && (value > 0) !== (previousValue > 0)) {
+            containsGeometry = true;
+        }
+        previousValue = value;
         for (bl = 0; bl < this.numWorkers; bl++) {
             blockPotentials[bl][i] = value;
         }
+    }
+
+    if ( ! containsGeometry) {
+        return;
     }
 
     return blockPotentialBuffers;
@@ -78211,11 +78227,13 @@ CubeMarch.prototype.marchVolume = function(config) {
 };
 
 CubeMarch.prototype.abort = function() {
+    this.aborting = true;
     this.workerPool.abort();
 };
 
 CubeMarch.prototype.march = function(config) {
 
+    this.aborting = false;
     this.cubesMarched = 0;
     var gl = this.scene.gl;
 
@@ -78235,12 +78253,25 @@ CubeMarch.prototype.march = function(config) {
     var volumeIndex = 0;
 
     var nextVolume = function() {
+        if (this.aborting) {
+            return;
+        }
+
         if (volumeIndex >= this.volumes.length) {
             config.hasOwnProperty('onDone') && config.onDone();
             return;
         }
 
         blockPotentialBuffers = this.calcPotentials(volumeIndex, pixels, uniforms);
+        if ( ! blockPotentialBuffers) {
+            var volume = this.volumes[volumeIndex];
+            var cubes = volume.dims[0] * volume.dims[1] * volume.dims[2];
+            this.cubesMarched += cubes;
+            config.onProgress(this.cubesMarched, this.totalCubes);
+            volumeIndex += 1;
+            setTimeout(nextVolume.bind(this), 100);
+            return;
+        }
 
         this.marchVolume({
             volumeIndex: volumeIndex,
@@ -78271,7 +78302,7 @@ var BoundingControls = require('./controls/bounding-controls.js');
 var Editor = require('glsl-editor');
 
 
-var example = "\nfloat mapDistance(vec3 p) {\n    return length(p) - .8;\n}\n";
+var example = "\n// Your glsl signed distance function:\n\nfloat mapDistance(vec3 p) {\n    return length(p) - .8;\n}\n";
 var config = {
     container: document.getElementById('main'),
     value: example
@@ -78414,36 +78445,11 @@ var Renderer = function(el) {
         renderer.setSize(width, height);
     }
 
-    var projectId = window.location;
-
-    function storeControls() {
-        var state = JSON.stringify({
-            target: controls.target,
-            position: controls.object.position,
-            up: controls.object.up
-        })
-        sessionStorage.setItem(projectId + 'threecontrols', state);
-    }
-
-    function restoreControls() {
-        var state = sessionStorage.getItem(projectId + 'threecontrols');
-        state = JSON.parse(state);
-        // state = false;
-        if (state) {
-            controls.target0.copy(state.target);
-            controls.position0.copy(state.position);
-            controls.up0.copy(state.up);
-            controls.reset();    
-        }
-    }
-
     controls.addEventListener('change', function() {
         render();
-        storeControls();
     });
 
     window.addEventListener('resize', onWindowResize, false);
-    restoreControls();
     animate();
 
     this.sections = [];

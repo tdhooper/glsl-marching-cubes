@@ -460,6 +460,13 @@ body {
 /* Layout
    ========================================================================== */
 
+.header {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 1;
+}
+
 .ui {
   display: flex;
   flex-direction: column;
@@ -513,6 +520,25 @@ body {
   width: 100% !important;
   height: 100% !important;
   display: block;
+}
+
+/* Header
+   ========================================================================== */
+
+.header {
+  font-size: 16px;
+  padding: 12px;
+  color: #06B6EF;
+}
+
+.header-title {
+  font-size: 18px;
+  display: inline;
+  color: #48B685;
+}
+
+.header-about {
+  color: inherit;
 }
 
 /* Editor
