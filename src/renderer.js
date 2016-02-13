@@ -24,16 +24,19 @@ var Renderer = function(el) {
 
     this.material = new THREE.MeshBasicMaterial({
         color: '#fff',
-        side: THREE.DoubleSide,
         wireframe: true
     });
 
     var axisHelper = new THREE.AxisHelper( 1 );
     scene.add( axisHelper );
 
-    var boundsGeometry = new THREE.BoxGeometry(1, 1, 1);
-    var boundsObj = new THREE.Mesh(boundsGeometry, this.material);
-    var bounds = new THREE.BoxHelper(boundsObj);
+    var boundsMaterial = new THREE.MeshBasicMaterial({
+        color: '#ff0',
+        wireframe: true
+    });
+
+    var boundsGeometry = new THREE.BoxGeometry(1, 1, 1, 5, 5, 5);
+    var bounds = new THREE.Mesh(boundsGeometry, boundsMaterial);
     scene.add(bounds);
 
     function render() {
