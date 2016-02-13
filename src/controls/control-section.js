@@ -38,24 +38,46 @@ ProcessControls.prototype.init = function() {
     this.ractive.on(this.ns('start'), this.start.bind(this));
     this.ractive.on(this.ns('cancel'), this.cancel.bind(this));
     this.ractive.observe(this.ns('resolution.*'), this.onResolutionUpdate.bind(this));
-    this.ractive.observe(this.ns('equal'), this.onEqualUpdate.bind(this));
+    this.ractive.observe(this.ns('proportional'), this.onProportionalUpdate.bind(this));
+    this.ractive.observe('bounding.size.*', this.onBoundingUpdate.bind(this));
 };
 
-ProcessControls.prototype.onResolutionUpdate = function(value) {
-    if (this.ractive.get(this.ns('equal'))) {
-        this.ractive.set(this.ns('resolution.x'), value);
-        this.ractive.set(this.ns('resolution.y'), value);
-        this.ractive.set(this.ns('resolution.z'), value);
+ProcessControls.prototype.onResolutionUpdate = function(value, old, keypath) {
+    if (this.ractive.get(this.ns('proportional'))) {
+        var component = keypath.split('.').pop();
+        this.setProportionalResolution(value, component);
     }
 };
 
-ProcessControls.prototype.onEqualUpdate = function(value) {
+ProcessControls.prototype.onProportionalUpdate = function(value) {
     if (value) {
-        first = this.ractive.get(this.ns('resolution.x'));
-        this.ractive.set(this.ns('resolution.x'), first);
-        this.ractive.set(this.ns('resolution.y'), first);
-        this.ractive.set(this.ns('resolution.z'), first);
+        this.forceProportions('x');
     }
+};
+
+ProcessControls.prototype.onBoundingUpdate = function(value, old, keypath) {
+    if (this.ractive.get(this.ns('proportional'))) {
+        var bound = keypath.split('.').pop()
+        var nonCorrespondingComponent = {'height': 'x', 'depth': 'y', 'width': 'z'}[bound];
+        this.forceProportions(nonCorrespondingComponent);
+    }
+};
+
+ProcessControls.prototype.forceProportions = function(component) {
+    var value = this.ractive.get(this.ns('resolution.' + component));
+    this.setProportionalResolution(value, component);
+};
+
+ProcessControls.prototype.setProportionalResolution = function(value, component) {
+    var base = this.boundForComp(component);
+    this.ractive.set(this.ns('resolution.x'), Math.round((this.boundForComp('x') / base) * value));
+    this.ractive.set(this.ns('resolution.y'), Math.round((this.boundForComp('y') / base) * value));
+    this.ractive.set(this.ns('resolution.z'), Math.round((this.boundForComp('z') / base) * value));
+};
+
+ProcessControls.prototype.boundForComp = function(component) {
+    var bound = {'x': 'width', 'y': 'height', 'z': 'depth'}[component]
+    return this.ractive.get('bounding.size.' + bound);
 };
 
 ProcessControls.prototype.done = function() {
