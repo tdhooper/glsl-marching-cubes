@@ -11,6 +11,11 @@ PreviewControls.prototype = Object.create(ProcessControls.prototype);
 PreviewControls.prototype.constructor = PreviewControls;
 PreviewControls.prototype.namespace = 'preview';
 
+PreviewControls.prototype.init = function() {
+    ProcessControls.prototype.init.call(this);
+    this.ractive.observe(this.ns('wireframe'), this.toggleWireframe.bind(this));
+};
+
 PreviewControls.prototype.update = function(data) {
     if ( ! data) {
         return;
@@ -52,6 +57,10 @@ PreviewControls.prototype.progressMessage = function(cubesMarched, totalCubes) {
 PreviewControls.prototype.doneMessage = function() {
     var message = ProcessControls.prototype.doneMessage.call(this);
     return 'Render ' + message;
+};
+
+PreviewControls.prototype.toggleWireframe = function(value) {
+    this.renderer.toggleWireframe(value);
 };
 
 module.exports = PreviewControls;

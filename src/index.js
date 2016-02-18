@@ -34,7 +34,8 @@ var state = {
             x: 50,
             y: 50,
             z: 50
-        }
+        },
+        wireframe: false
     },
     download: {
         proportional: true,
@@ -54,7 +55,8 @@ var state = {
             width: 2,
             height: 2,
             depth: 2
-        }
+        },
+        visible: true
     },
 };
 

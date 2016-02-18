@@ -74,6 +74,16 @@
                 </li>
             </ul>
         </div>
+
+        <div class="control">
+            <input
+                class="control-checkbox"
+                id="bounding-visible"
+                type="checkbox"
+                checked="{{ bounding.visible }}"
+            >
+            <label class="control-label" for="bounding-visible">Visible</label>
+        </div>
     </fieldset>
 
     <fieldset class="control-section control-section--preview">
@@ -115,6 +125,15 @@
                 >
             </li>
         </ul>
+        <div class="control">
+            <input
+                class="control-checkbox"
+                id="preview-wireframe"
+                type="checkbox"
+                checked="{{ preview.wireframe }}"
+            >
+            <label class="control-label" for="preview-wireframe">Wireframe</label>
+        </div>
         <button
             class="btn"
             on-click="preview.start"
