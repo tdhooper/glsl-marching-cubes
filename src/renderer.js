@@ -27,7 +27,7 @@ var Renderer = function(el) {
     var axisHelper = new THREE.AxisHelper( 1 );
     scene.add( axisHelper );
 
-    var light = new THREE.PointLight( 0xffffff, 1, 100 );
+    var light = new THREE.PointLight( 0xffffff, 1, 200 );
     light.position.set( 20, 30, 40 );
     camera.add( light );
 
