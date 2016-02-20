@@ -69734,6 +69734,7 @@ BoundingControls.prototype.init = function() {
     this.ractive.observe(this.ns('size'), this.onUpdate.bind(this));
     this.ractive.observe(this.ns('position'), this.onUpdate.bind(this));
     this.ractive.observe(this.ns('visible'), this.toggleVisibilty.bind(this));
+    this.ractive.on('source.bounding', this.onSourceUpdate.bind(this));
 };
 
 BoundingControls.prototype.onUpdate = function() {
@@ -69746,6 +69747,19 @@ BoundingControls.prototype.onUpdate = function() {
         bounding.size.height,
         bounding.size.depth
     );
+};
+
+BoundingControls.prototype.onSourceUpdate = function(value) {
+    if (value.position) {
+        this.ractive.set(this.ns('position.x'), value.position.x);
+        this.ractive.set(this.ns('position.y'), value.position.y);
+        this.ractive.set(this.ns('position.z'), value.position.z);
+    }
+    if (value.size) {
+        this.ractive.set(this.ns('size.width'), value.size.width);
+        this.ractive.set(this.ns('size.height'), value.size.height);
+        this.ractive.set(this.ns('size.depth'), value.size.depth);
+    }
 };
 
 BoundingControls.prototype.toggleVisibilty = function(visible) {
@@ -69970,6 +69984,127 @@ DownloadControls.prototype.doneMessage = function() {
 module.exports = DownloadControls;
 
 },{"./control-section.js":18}],20:[function(require,module,exports){
+
+var EditorControls = function(editor, ractive) {
+    this.editor = editor;
+    this.ractive = ractive;
+};
+
+EditorControls.prototype = {
+
+    init: function() {
+        this.load();
+        this.ractive.on('examples.load', this.load.bind(this));
+        this.editor.editor.on('change', this.onUpdate.bind(this));
+        this.ractive.observe('bounding.size', this.onBoundingUpdate.bind(this));
+        this.ractive.observe('bounding.position', this.onBoundingUpdate.bind(this));
+    },
+
+    onUpdate: function() {
+        var source = this.editor.getValue(source);
+        this.ractive.fire('source.bounding', this.getBoundingProperties(source));
+    },
+
+    onBoundingUpdate: function() {
+        var bounding = this.ractive.get('bounding');
+        var source = this.editor.getValue();
+        source = this.setBoundingProperties(source, bounding);
+        if (source) {
+            this.editor.setValue(source);
+        }
+    },
+
+    load: function() {
+        var index = this.ractive.get('examples.selected');
+        var source = this.ractive.get('examples.list')[index].source;
+        this.editor.setValue(source);
+    },
+
+    getBoundingProperties: function(source) {
+        return {
+            position: this.getBoundingPosition(source),
+            size: this.getBoundingSize(source)
+        };
+    },
+
+    setBoundingProperties: function(source, props) {
+        source = this.setBoundingPosition(source, props.position);
+        if (source) {
+            source = this.setBoundingSize(source, props.size);
+        }
+        return source;
+    },
+
+    getBoundingPosition: function(source) {
+        var values = this.getBoundingValue('BOUNDING_BOX_POSITION', source);
+        if (values) {
+            return {
+                x: values[0],
+                y: values[1],
+                z: values[2]
+            }
+        };
+    },
+
+    getBoundingSize: function(source) {
+        var values = this.getBoundingValue('BOUNDING_BOX_SIZE', source);
+        if (values) {
+            return {
+                width: values[0],
+                height: values[1],
+                depth: values[2]
+            }
+        };
+    },
+
+    setBoundingPosition: function(source, position) {
+        return this.setBoundingValue(
+            'BOUNDING_BOX_POSITION',
+            source,
+            [
+                position.x,
+                position.y,
+                position.z
+            ]
+        );
+    },
+
+    setBoundingSize: function(source, size) {
+        return this.setBoundingValue(
+            'BOUNDING_BOX_SIZE',
+            source,
+            [
+                size.width,
+                size.height,
+                size.depth
+            ]
+        );
+    },
+
+    getBoundingValue: function(name, source) {
+        var re = new RegExp(name + '\\s+([-\\d\\.]+)\\s+([-\\d\\.]+)\\s+([-\\d\\.]+)');
+        var matches = re.exec(source);
+        if (matches && matches.length == 4) {
+            return [
+                Number(matches[1]),
+                Number(matches[2]),
+                Number(matches[3])
+            ]
+        }
+    },
+
+    setBoundingValue: function(name, source, values) {
+        if (values[0] == undefined || values[1] == undefined || values[2] == undefined) {
+            return;
+        }
+        var re = new RegExp('(' + name + '\\s+)[-\\d\\.]+(\\s+)[-\\d\\.]+(\\s+)[-\\d\\.]+');
+        return source.replace(re, '$1'+values[0]+'$2'+values[1]+'$3'+values[2]);
+    }
+};
+
+module.exports = EditorControls;
+
+},{}],21:[function(require,module,exports){
 var ProcessControls = require('./control-section.js').ProcessControls;
 
 var PreviewControls = function(cubeMarch, renderer, editor, ractive) {
@@ -70037,7 +70172,7 @@ PreviewControls.prototype.toggleWireframe = function(value) {
 
 module.exports = PreviewControls;
 
-},{"./control-section.js":18}],21:[function(require,module,exports){
+},{"./control-section.js":18}],22:[function(require,module,exports){
 "use strict";
 
 var twgl = require("twgl.js");
@@ -70247,7 +70382,7 @@ CubeMarch.prototype.march = function(config) {
 
 module.exports = CubeMarch;
 
-},{"./scene":24,"./split-volume":25,"./worker-pool":28,"glsl-read-float":12,"twgl.js":16}],22:[function(require,module,exports){
+},{"./scene":25,"./split-volume":26,"./worker-pool":29,"glsl-read-float":12,"twgl.js":16}],23:[function(require,module,exports){
 "use strict";
 
 var CubeMarch = require("./cubemarch");
@@ -70257,24 +70392,18 @@ var Ractive = require('ractive');
 var PreviewControls = require('./controls/preview-controls.js');
 var DownloadControls = require('./controls/download-controls.js');
 var BoundingControls = require('./controls/bounding-controls.js');
+var EditorControls = require('./controls/editor-controls.js');
 var Editor = require('glsl-editor');
 
 
-var example = "\n// Your glsl signed distance function:\n\nfloat mapDistance(vec3 p) {\n    return length(p) - .8;\n}\n";
-var config = {
-    container: document.getElementById('main'),
-    value: example
-};
 
-var editor = Editor(config);
-editor.wrap.setAttribute('class', 'editor');
+// Core
 
-// inline CSS styles into bundle:
-// both are optional.
-require('glsl-editor/css');
-require('glsl-editor/theme');
+var cubeMarch = new CubeMarch();
+var exporter = new STLExporter();
+var renderer = new Renderer(document.getElementById('scene'));
 
-window.addEventListener('resize', editor.resize.bind(editor), false);
+// UI
 
 var state = {
     progress: 'Ready',
@@ -70308,13 +70437,28 @@ var state = {
         },
         visible: true
     },
+    examples: {
+        selected: 0,
+        list: [{
+            name: 'Sphere',
+            source: "\n// BOUNDING_BOX_POSITION 0 0 0\n// BOUNDING_BOX_SIZE 2 2 2\n\n// Your glsl signed distance function:\n\nfloat mapDistance(vec3 p) {\n  return length(p) - .8;\n}\n"
+        },{
+            name: 'Box',
+            source: "\n// BOUNDING_BOX_POSITION 0 0 0\n// BOUNDING_BOX_SIZE 2.5 2.1 2.2\n\nfloat vmax(vec3 v) {\n  return max(max(v.x, v.y), v.z);\n}\n\nfloat fBox(vec3 p, vec3 b) {\n  vec3 d = abs(p) - b;\n  return length(max(d, vec3(0))) + vmax(min(d, vec3(0)));\n}\n\nvoid pR(inout vec2 p, float a) {\n  p = cos(a)*p + sin(a)*vec2(p.y, -p.x);\n}\n\n// Your glsl signed distance function:\n\nfloat mapDistance(vec3 p) {\n  pR(p.xy, 0.2);\n  pR(p.xz, 0.4);\n  return fBox(p, vec3(.8, .8, .8));\n}\n"
+        },{
+            name: 'Sine Waves',
+            source: "\n// BOUNDING_BOX_POSITION 0 0 0\n// BOUNDING_BOX_SIZE 10 10 10\n\n// Your glsl signed distance function:\n\nfloat mapDistance(vec3 p) {\n  return sin(p.x) + sin(p.y) + sin(p.z);\n}\n"
+        },{
+            name: 'Torus',
+            source: "\n// BOUNDING_BOX_POSITION 0 0 0\n// BOUNDING_BOX_SIZE 1.6 0.6 1.6\n\nfloat fTorus(vec3 p, float smallRadius, float largeRadius) {\n    return length(vec2(length(p.xz) - largeRadius, p.y)) - smallRadius;\n}\n\n// Your glsl signed distance function:\n\nfloat mapDistance(vec3 p) {\n    return fTorus(p, 0.25, 0.5);\n}\n"
+        },{
+            name: 'Radiolarian',
+            source: "#define PHI (sqrt(5.)*0.5 + 0.5)\n#define PI 3.14159265\n\nfloat fOpIntersectionRound(float a, float b, float r) {\n    float m = max(a, b);\n    if ((-a < r) && (-b < r)) {\n        return max(m, -(r - sqrt((r+a)*(r+a) + (r+b)*(r+b))));\n    } else {\n        return m;\n    }\n}\n\n\n// Cone with correct distances to tip and base circle. Y is up, 0 is in the middle of the base.\nfloat fCone(vec3 p, float radius, float height) {\n    vec2 q = vec2(length(p.xz), p.y);\n    vec2 tip = q - vec2(0, height);\n    vec2 mantleDir = normalize(vec2(height, radius));\n    float mantle = dot(tip, mantleDir);\n    float d = max(mantle, -q.y);\n    float projected = dot(tip, vec2(mantleDir.y, -mantleDir.x));\n    \n    // distance to tip\n    if ((q.y > height) && (projected < 0.)) {\n        d = max(d, length(tip));\n    }\n    \n    // distance to base ring\n    if ((q.x > radius) && (projected > length(vec2(height, radius)))) {\n        d = max(d, length(q - vec2(radius, 0)));\n    }\n    return d;\n}\n\n// Reflect space at a plane\nfloat pReflect(inout vec3 p, vec3 planeNormal, float offset) {\n    float t = dot(p, planeNormal)+offset;\n    if (t < 0.) {\n        p = p - (2.*t)*planeNormal;\n    }\n    return sign(t);\n}\n\n// Rotate around a coordinate axis (i.e. in a plane perpendicular to that axis) by angle <a>.\n// Read like this: R(p.xz, a) rotates \"x towards z\".\n// This is fast if <a> is a compile-time constant and slower (but still practical) if not.\nvoid pR(inout vec2 p, float a) {\n    p = cos(a)*p + sin(a)*vec2(p.y, -p.x);\n}\n\n// The \"Round\" variant uses a quarter-circle to join the two objects smoothly:\nfloat fOpUnionRound(float a, float b, float r) {\n    float m = min(a, b);\n    if ((a < r) && (b < r) ) {\n        return min(m, r - sqrt((r-a)*(r-a) + (r-b)*(r-b)));\n    } else {\n     return m;\n    }\n}\n\n// Repeat around the origin by a fixed angle.\n// For easier use, num of repetitions is use to specify the angle.\nfloat pModPolar(inout vec2 p, float repetitions) {\n    float angle = 2.*PI/repetitions;\n    float a = atan(p.y, p.x) + angle/2.;\n    float r = length(p);\n    float c = floor(a/angle);\n    a = mod(a,angle) - angle/2.;\n    p = vec2(cos(a), sin(a))*r;\n    // For an odd number of repetitions, fix cell index of the cell in -x direction\n    // (cell index would be e.g. -5 and 5 in the two halves of the cell):\n    if (abs(c) >= (repetitions/2.)) c = abs(c);\n    return c;\n}\n\n\nvec3 pModDodecahedron(inout vec3 p) {\n    vec3 v1 = normalize(vec3(0., PHI, 1.));\n    vec3 v2 = normalize(vec3(PHI, 1., 0.));\n\n    float sides = 5.;\n    float dihedral = acos(dot(v1, v2));\n    float halfDdihedral = dihedral / 2.;\n    float faceAngle = 2. * PI / sides;\n    \n    p.z = abs(p.z);\n    \n    pR(p.xz, -halfDdihedral);\n    pR(p.xy, faceAngle / 4.);\n    \n    p.x = -abs(p.x);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    p.z = -p.z;\n    pModPolar(p.yx, sides);\n    pReflect(p, vec3(-1, 0, 0), 0.);\n    \n    return p;\n}\n\nvec3 pModIcosahedron(inout vec3 p) {\n\n    vec3 v1 = normalize(vec3(1, 1, 1 ));\n    vec3 v2 = normalize(vec3(0, 1, PHI+1.));\n\n    float sides = 3.;\n    float dihedral = acos(dot(v1, v2));\n    float halfDdihedral = dihedral / 2.;\n    float faceAngle = 2. * PI / sides;\n    \n\n    p.z = abs(p.z);    \n    pR(p.yz, halfDdihedral);\n    \n    p.x = -abs(p.x);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n    \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n     \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    pR(p.xy, faceAngle);\n  \n    pR(p.zy, halfDdihedral);\n    p.y = -abs(p.y);\n    pR(p.zy, -halfDdihedral);\n\n    p.z = -p.z;\n    pModPolar(p.yx, sides);\n    pReflect(p, vec3(-1, 0, 0), 0.);\n\n    return p;\n}\n\nfloat spikeModel(vec3 p) {\n    pR(p.zy, PI/2.);\n    return fCone(p, 0.25, 3.);\n}\n\nfloat spikesModel(vec3 p) {\n    float smooth = 0.6;\n    \n    pModDodecahedron(p);\n    \n    vec3 v1 = normalize(vec3(0., PHI, 1.));\n    vec3 v2 = normalize(vec3(PHI, 1., 0.));\n\n    float sides = 5.;\n    float dihedral = acos(dot(v1, v2));\n    float halfDdihedral = dihedral / 2.;\n    float faceAngle = 2. * PI / sides;\n    \n    float spikeA = spikeModel(p);\n    \n    pR(p.zy, -dihedral);\n\n    float spikeB = spikeModel(p);\n\n    pR(p.xy, -faceAngle);\n    pR(p.zy, dihedral);\n    \n    float spikeC = spikeModel(p);\n    \n    return fOpUnionRound(\n        spikeC,\n        fOpUnionRound(\n            spikeA,\n            spikeB,\n            smooth\n        ),\n        smooth\n    );\n}\n\nfloat coreModel(vec3 p) {\n    float outer = length(p) - .9;\n    float spikes = spikesModel(p);\n    outer = fOpUnionRound(outer, spikes, 0.4);\n    return outer;\n}\n\nfloat exoSpikeModel(vec3 p) {\n    pR(p.zy, PI/2.);\n    p.y -= 1.;\n    return fCone(p, 0.5, 1.);\n}\n\nfloat exoSpikesModel(vec3 p) {\n    pModIcosahedron(p);\n\n    vec3 v1 = normalize(vec3(1, 1, 1 ));\n    vec3 v2 = normalize(vec3(0, 1, PHI+1.));\n\n    float dihedral = acos(dot(v1, v2));\n\n    float spikeA = exoSpikeModel(p);\n    \n    pR(p.zy, -dihedral);\n\n    float spikeB = exoSpikeModel(p);\n\n    return fOpUnionRound(spikeA, spikeB, 0.5);\n}\n\nfloat exoHolesModel(vec3 p) {\n    float len = 3.;\n    pModDodecahedron(p);\n    p.z += 1.5;\n    return length(p) - .65;\n}\n\nfloat exoModel(vec3 p) {    \n    float thickness = 0.18;\n    float outer = length(p) - 1.5;\n    float inner = outer + thickness;\n\n    float spikes = exoSpikesModel(p);\n    outer = fOpUnionRound(outer, spikes, 0.3);\n    \n    float shell = max(-inner, outer);\n\n    float holes = exoHolesModel(p);\n    shell = fOpIntersectionRound(-holes, shell, thickness/2.);\n    \n    return shell;\n}\n\nfloat doExo(vec3 p) {\n    //return length(p + vec3(0,0,-2)) - 3.;\n    //float disp = (sin(length(p) * 5. - t * 8.)) * 0.03;\n    return exoModel(p);\n}\n\nfloat doCore(vec3 p) {\n    //return length(p + vec3(0,0,2)) - 3.;\n    return coreModel(p);\n}\n\n\n// checks to see which intersection is closer\n// and makes the y of the vec2 be the proper id\nvec2 opU( vec2 d1, vec2 d2 ){\n    \n    return (d1.x<d2.x) ? d1 : d2;\n    \n}\n\nfloat map( vec3 p ){  \n    p *= 3.;\n    vec2 res = vec2(doExo(p) ,1.); \n    res = opU(res, vec2(doCore(p) ,2.));\n    \n    return res.x;\n}\n\n\n// BOUNDING_BOX_POSITION 0 0 0\n// BOUNDING_BOX_SIZE 1.8 1.8 1.8\n\n// Your glsl signed distance function:\n\nfloat mapDistance(vec3 p) {\n    return map(p);\n}\n"
+        }]
+    }
 };
 
-var cubeMarch = new CubeMarch();
-var exporter = new STLExporter();
-var renderer = new Renderer(document.getElementById('scene'));
-
-var template = "<div class=\"controls\">\n\n    <p class=\"progress\">{{{ progress }}}</p>\n\n    <fieldset class=\"control-section\">\n        <h3 class=\"control-heading\">Bounding box</h3>\n\n        <div class=\"control-group control-group--horizontal\">\n            <h4>Position</h4>\n            <ul>\n                <li class=\"control\">\n                    <label class=\"control-label visuallyhidden\" for=\"bounding-x\">x</label>\n                    <input\n                        class=\"control-input control-input--narrow\"\n                        id=\"bounding-x\"\n                        type=\"number\"\n                        step=\".1\"\n                        value=\"{{ bounding.position.x }}\"\n                    >\n                </li>\n                <li class=\"control\">\n                    <label class=\"control-label visuallyhidden\" for=\"bounding-y\">y</label>\n                    <input\n                        class=\"control-input control-input--narrow\"\n                        id=\"bounding-y\"\n                        type=\"number\"\n                        step=\".1\"\n                        value=\"{{ bounding.position.y }}\"\n                    >\n                <li class=\"control\">\n                    <label class=\"control-label visuallyhidden\" for=\"bounding-z\">z</label>\n                    <input\n                        class=\"control-input control-input--narrow\"\n                        id=\"bounding-z\"\n                        type=\"number\"\n                        step=\".1\"\n                        value=\"{{ bounding.position.z }}\"\n                    >\n                </li>\n            </ul>\n        </div>\n\n        <div class=\"control-group control-group--horizontal\">\n            <h4>Size</h4>\n            <ul>\n                <li class=\"control\">\n                    <label class=\"control-label visuallyhidden\" for=\"bounding-w\">w</label>\n                    <input\n                        class=\"control-input control-input--narrow\"\n                        id=\"bounding-w\"\n                        type=\"number\"\n                        step=\".1\"\n                        value=\"{{ bounding.size.width }}\"\n                    >\n                </li>\n                <li class=\"control\">\n                    <label class=\"control-label visuallyhidden\" for=\"bounding-h\">h</label>\n                    <input\n                        class=\"control-input control-input--narrow\"\n                        id=\"bounding-h\"\n                        type=\"number\"\n                        step=\".1\"\n                        value=\"{{ bounding.size.height }}\"\n                    >\n                <li class=\"control\">\n                    <label class=\"control-label visuallyhidden\" for=\"bounding-d\">d</label>\n                    <input\n                        class=\"control-input control-input--narrow\"\n                        id=\"bounding-d\"\n                        type=\"number\"\n                        step=\".1\"\n                        value=\"{{ bounding.size.depth }}\"\n                    >\n                </li>\n            </ul>\n        </div>\n\n        <div class=\"control\">\n            <input\n                class=\"control-checkbox\"\n                id=\"bounding-visible\"\n                type=\"checkbox\"\n                checked=\"{{ bounding.visible }}\"\n            >\n            <label class=\"control-label\" for=\"bounding-visible\">Visible</label>\n        </div>\n    </fieldset>\n\n    <fieldset class=\"control-section control-section--preview\">\n        <h3 class=\"control-heading\">Preview</h3>\n        <div class=\"control\">\n            <input\n                class=\"control-checkbox\"\n                id=\"preview-proportional\"\n                type=\"checkbox\"\n                checked=\"{{ preview.proportional }}\"\n            >\n            <label class=\"control-label\" for=\"preview-proportional\">Proportional</label>\n        </div>\n        <ul class=\"control-group--horizontal\">\n            <li class=\"control\">\n                <label class=\"control-label visuallyhidden\" for=\"preview-x\">x</label>\n                <input\n                    class=\"control-input control-input--narrow\"\n                    id=\"preview-x\"\n                    type=\"number\"\n                    value=\"{{ preview.resolution.x }}\"\n                >\n            </li>\n            <li class=\"control\">\n                <label class=\"control-label visuallyhidden\" for=\"preview-y\">y</label>\n                <input\n                    class=\"control-input control-input--narrow\"\n                    id=\"preview-y\"\n                    type=\"number\"\n                    value=\"{{ preview.resolution.y }}\"\n                >\n            <li class=\"control\">\n                <label class=\"control-label visuallyhidden\" for=\"preview-z\">z</label>\n                <input\n                    class=\"control-input control-input--narrow\"\n                    id=\"preview-z\"\n                    type=\"number\"\n                    value=\"{{ preview.resolution.z }}\"\n                >\n            </li>\n        </ul>\n        <div class=\"control\">\n            <input\n                class=\"control-checkbox\"\n                id=\"preview-wireframe\"\n                type=\"checkbox\"\n                checked=\"{{ preview.wireframe }}\"\n            >\n            <label class=\"control-label\" for=\"preview-wireframe\">Wireframe</label>\n        </div>\n        <button\n            class=\"btn\"\n            on-click=\"preview.start\"\n            {{#if preview.disable }}\n                disabled\n            {{/if}}\n        >Render</button>\n        {{#if preview.showCancel }}\n            <button class=\"btn\" on-click=\"preview.cancel\">Cancel</button>\n        {{/if}}\n    </fieldset>\n\n    <fieldset class=\"control-section control-section--download\">\n        <h3 class=\"control-heading\">Download</h3>\n        <div class=\"control\">\n            <input\n                class=\"control-checkbox\"\n                id=\"download-proportional\"\n                type=\"checkbox\"\n                checked=\"{{ download.proportional }}\"\n            >\n            <label class=\"control-label\" for=\"download-proportional\">Proportional</label>\n        </div>\n        <ul class=\"control-group--horizontal\">\n            <li class=\"control\">\n                <label class=\"control-label visuallyhidden\" for=\"download-x\">x</label>\n                <input\n                    class=\"control-input control-input--narrow\"\n                    id=\"download-x\"\n                    type=\"number\"\n                    value=\"{{ download.resolution.x }}\"\n                >\n            </li>\n            <li class=\"control\">\n                <label class=\"control-label visuallyhidden\" for=\"download-y\">y</label>\n                <input\n                    class=\"control-input control-input--narrow\"\n                    id=\"download-y\"\n                    type=\"number\"\n                    value=\"{{ download.resolution.y }}\"\n                >\n            <li class=\"control\">\n                <label class=\"control-label visuallyhidden\" for=\"download-z\">z</label>\n                <input\n                    class=\"control-input control-input--narrow\"\n                    id=\"download-z\"\n                    type=\"number\"\n                    value=\"{{ download.resolution.z }}\"\n                >\n            </li>\n        </ul>\n        <button\n            class=\"btn\"\n            on-click=\"download.start\"\n            {{#if download.disable }}\n                disabled\n            {{/if}}\n        >Generate</button>\n        {{#if download.showCancel }}\n            <button class=\"btn\" on-click=\"download.cancel\">Cancel</button>\n        {{/if}}\n    </fieldset>\n</div>\n";
+var template = "<div class=\"edit-pane\" id=\"edit-pane\">\n    <fieldset class=\"control-section control-section--examples\">\n        <div class=\"control-group control-group--horizontal\">\n            <div class=\"control\">\n                <label class=\"control-label control-heading\" for=\"examples-list\">Examples:</label>\n                <select\n                    class=\"control-input control-input--select\"\n                    id=\"examples-list\"\n                    value=\"{{ examples.selected }}\"\n                >\n                    {{#examples.list:i}}\n                        <option value=\"{{ i }}\">{{ name }}</option>\n                    {{/examples.list}}\n                </select>\n            </div>\n            <button class=\"btn\" on-click='examples.load'>Load</button>\n        </div>\n    </fieldset>\n</div>\n\n<div class=\"control-pane\">\n\n    <p class=\"progress\">{{{ progress }}}</p>\n\n    <fieldset class=\"control-section\">\n        <h3 class=\"control-heading\">Bounding box</h3>\n\n        <h4>Position</h4>\n        <ul class=\"control-group control-group--horizontal\">\n            <li class=\"control\">\n                <label class=\"control-label visuallyhidden\" for=\"bounding-x\">x</label>\n                <input\n                    class=\"control-input control-input--narrow\"\n                    id=\"bounding-x\"\n                    type=\"number\"\n                    step=\".1\"\n                    value=\"{{ bounding.position.x }}\"\n                >\n            </li>\n            <li class=\"control\">\n                <label class=\"control-label visuallyhidden\" for=\"bounding-y\">y</label>\n                <input\n                    class=\"control-input control-input--narrow\"\n                    id=\"bounding-y\"\n                    type=\"number\"\n                    step=\".1\"\n                    value=\"{{ bounding.position.y }}\"\n                >\n            <li class=\"control\">\n                <label class=\"control-label visuallyhidden\" for=\"bounding-z\">z</label>\n                <input\n                    class=\"control-input control-input--narrow\"\n                    id=\"bounding-z\"\n                    type=\"number\"\n                    step=\".1\"\n                    value=\"{{ bounding.position.z }}\"\n                >\n            </li>\n        </ul>\n\n        <h4>Size</h4>\n        <ul class=\"control-group control-group--horizontal\">\n            <li class=\"control\">\n                <label class=\"control-label visuallyhidden\" for=\"bounding-w\">w</label>\n                <input\n                    class=\"control-input control-input--narrow\"\n                    id=\"bounding-w\"\n                    type=\"number\"\n                    step=\".1\"\n                    value=\"{{ bounding.size.width }}\"\n                >\n            </li>\n            <li class=\"control\">\n                <label class=\"control-label visuallyhidden\" for=\"bounding-h\">h</label>\n                <input\n                    class=\"control-input control-input--narrow\"\n                    id=\"bounding-h\"\n                    type=\"number\"\n                    step=\".1\"\n                    value=\"{{ bounding.size.height }}\"\n                >\n            <li class=\"control\">\n                <label class=\"control-label visuallyhidden\" for=\"bounding-d\">d</label>\n                <input\n                    class=\"control-input control-input--narrow\"\n                    id=\"bounding-d\"\n                    type=\"number\"\n                    step=\".1\"\n                    value=\"{{ bounding.size.depth }}\"\n                >\n            </li>\n        </ul>\n\n        <div class=\"control\">\n            <input\n                class=\"control-checkbox\"\n                id=\"bounding-visible\"\n                type=\"checkbox\"\n                checked=\"{{ bounding.visible }}\"\n            >\n            <label class=\"control-label\" for=\"bounding-visible\">Visible</label>\n        </div>\n    </fieldset>\n\n    <fieldset class=\"control-section control-section--preview\">\n        <h3 class=\"control-heading\">Preview</h3>\n        <div class=\"control\">\n            <input\n                class=\"control-checkbox\"\n                id=\"preview-proportional\"\n                type=\"checkbox\"\n                checked=\"{{ preview.proportional }}\"\n            >\n            <label class=\"control-label\" for=\"preview-proportional\">Proportional</label>\n        </div>\n        <ul class=\"control-group control-group--horizontal\">\n            <li class=\"control\">\n                <label class=\"control-label visuallyhidden\" for=\"preview-x\">x</label>\n                <input\n                    class=\"control-input control-input--narrow\"\n                    id=\"preview-x\"\n                    type=\"number\"\n                    value=\"{{ preview.resolution.x }}\"\n                >\n            </li>\n            <li class=\"control\">\n                <label class=\"control-label visuallyhidden\" for=\"preview-y\">y</label>\n                <input\n                    class=\"control-input control-input--narrow\"\n                    id=\"preview-y\"\n                    type=\"number\"\n                    value=\"{{ preview.resolution.y }}\"\n                >\n            <li class=\"control\">\n                <label class=\"control-label visuallyhidden\" for=\"preview-z\">z</label>\n                <input\n                    class=\"control-input control-input--narrow\"\n                    id=\"preview-z\"\n                    type=\"number\"\n                    value=\"{{ preview.resolution.z }}\"\n                >\n            </li>\n        </ul>\n        <div class=\"control\">\n            <input\n                class=\"control-checkbox\"\n                id=\"preview-wireframe\"\n                type=\"checkbox\"\n                checked=\"{{ preview.wireframe }}\"\n            >\n            <label class=\"control-label\" for=\"preview-wireframe\">Wireframe</label>\n        </div>\n        <button\n            class=\"btn\"\n            on-click=\"preview.start\"\n            {{#if preview.disable }}\n                disabled\n            {{/if}}\n        >Render</button>\n        {{#if preview.showCancel }}\n            <button class=\"btn\" on-click=\"preview.cancel\">Cancel</button>\n        {{/if}}\n    </fieldset>\n\n    <fieldset class=\"control-section control-section--download\">\n        <h3 class=\"control-heading\">Download</h3>\n        <div class=\"control\">\n            <input\n                class=\"control-checkbox\"\n                id=\"download-proportional\"\n                type=\"checkbox\"\n                checked=\"{{ download.proportional }}\"\n            >\n            <label class=\"control-label\" for=\"download-proportional\">Proportional</label>\n        </div>\n        <ul class=\"control-group control-group--horizontal\">\n            <li class=\"control\">\n                <label class=\"control-label visuallyhidden\" for=\"download-x\">x</label>\n                <input\n                    class=\"control-input control-input--narrow\"\n                    id=\"download-x\"\n                    type=\"number\"\n                    value=\"{{ download.resolution.x }}\"\n                >\n            </li>\n            <li class=\"control\">\n                <label class=\"control-label visuallyhidden\" for=\"download-y\">y</label>\n                <input\n                    class=\"control-input control-input--narrow\"\n                    id=\"download-y\"\n                    type=\"number\"\n                    value=\"{{ download.resolution.y }}\"\n                >\n            <li class=\"control\">\n                <label class=\"control-label visuallyhidden\" for=\"download-z\">z</label>\n                <input\n                    class=\"control-input control-input--narrow\"\n                    id=\"download-z\"\n                    type=\"number\"\n                    value=\"{{ download.resolution.z }}\"\n                >\n            </li>\n        </ul>\n        <button\n            class=\"btn\"\n            on-click=\"download.start\"\n            {{#if download.disable }}\n                disabled\n            {{/if}}\n        >Generate</button>\n        {{#if download.showCancel }}\n            <button class=\"btn\" on-click=\"download.cancel\">Cancel</button>\n        {{/if}}\n    </fieldset>\n</div>\n";
 var ractive = new Ractive({
     el: document.getElementById('main'),
     append: true,
@@ -70337,15 +70481,36 @@ var ractive = new Ractive({
 });
 
 
+// Editor
+
+var config = {
+    container: ractive.nodes['edit-pane'],
+    value: ''
+};
+
+var editor = Editor(config);
+editor.wrap.setAttribute('class', 'editor');
+
+// inline CSS styles into bundle:
+// both are optional.
+require('glsl-editor/css');
+require('glsl-editor/theme');
+
+window.addEventListener('resize', editor.resize.bind(editor), false);
+
+// Controls
+
 var previewControls = new PreviewControls(cubeMarch, renderer, editor, ractive);
 var downloadControls = new DownloadControls(cubeMarch, exporter, editor, ractive);
 var boundingControls = new BoundingControls(renderer, ractive);
+var editorControls = new EditorControls(editor, ractive);
 
 previewControls.init();
 downloadControls.init();
 boundingControls.init();
+editorControls.init();
 
-},{"./controls/bounding-controls.js":17,"./controls/download-controls.js":19,"./controls/preview-controls.js":20,"./cubemarch":21,"./renderer":23,"./stl-exporter":26,"glsl-editor":4,"glsl-editor/css":2,"glsl-editor/theme":11,"ractive":13}],23:[function(require,module,exports){
+},{"./controls/bounding-controls.js":17,"./controls/download-controls.js":19,"./controls/editor-controls.js":20,"./controls/preview-controls.js":21,"./cubemarch":22,"./renderer":24,"./stl-exporter":27,"glsl-editor":4,"glsl-editor/css":2,"glsl-editor/theme":11,"ractive":13}],24:[function(require,module,exports){
 "use strict";
 
 var THREE = require('three');
@@ -70502,7 +70667,7 @@ Renderer.prototype = {
 
 module.exports = Renderer;
 
-},{"three":15,"three.trackball":14}],24:[function(require,module,exports){
+},{"three":15,"three.trackball":14}],25:[function(require,module,exports){
 "use strict";
 
 var twgl = require("twgl.js");
@@ -70602,7 +70767,7 @@ Scene.prototype.draw = function(spec) {
 
 module.exports = Scene;
 
-},{"twgl.js":16}],25:[function(require,module,exports){
+},{"twgl.js":16}],26:[function(require,module,exports){
 
 var maxDimension = function(dims) {
     if (dims[0] > dims[1]) {
@@ -70705,7 +70870,7 @@ var splitVolume = function(volume, maxSize) {
 
 module.exports = splitVolume;
 
-},{}],26:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
 "use strict";
 
 var STLWriter = require("./stl-writer");
@@ -70776,7 +70941,7 @@ STLExporter.prototype = {
 
 module.exports = STLExporter;
 
-},{"./stl-writer":27}],27:[function(require,module,exports){
+},{"./stl-writer":28}],28:[function(require,module,exports){
 
 // Cribbed from http://buildaweso.me/project/2014/10/26/writing-binary-stl-files-from-threejs-objects
 
@@ -70857,7 +71022,7 @@ STLWriter.prototype = {
 
 module.exports = STLWriter;
 
-},{"filesaver.js":1}],28:[function(require,module,exports){
+},{"filesaver.js":1}],29:[function(require,module,exports){
 
 var WorkerPool = function(filename, n) {
     this.queue = [];
@@ -70945,4 +71110,4 @@ WorkerPool.prototype.process = function(worker, job, done) {
 
 module.exports = WorkerPool;
 
-},{}]},{},[22]);
+},{}]},{},[23]);
