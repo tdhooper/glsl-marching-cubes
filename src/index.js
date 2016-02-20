@@ -60,6 +60,9 @@ var state = {
         },{
             name: 'Box',
             source: fs.readFileSync(__dirname + '/shaders/examples/box.glsl', 'utf8')
+        },{
+            name: 'Sine Waves',
+            source: fs.readFileSync(__dirname + '/shaders/examples/sine-waves.glsl', 'utf8')
         }]
     }
 };

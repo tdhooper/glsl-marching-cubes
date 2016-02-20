@@ -14,6 +14,7 @@ BoundingControls.prototype.init = function() {
     this.ractive.observe(this.ns('size'), this.onUpdate.bind(this));
     this.ractive.observe(this.ns('position'), this.onUpdate.bind(this));
     this.ractive.observe(this.ns('visible'), this.toggleVisibilty.bind(this));
+    this.ractive.on('source.bounding', this.onSourceUpdate.bind(this));
 };
 
 BoundingControls.prototype.onUpdate = function() {
@@ -26,6 +27,15 @@ BoundingControls.prototype.onUpdate = function() {
         bounding.size.height,
         bounding.size.depth
     );
+};
+
+BoundingControls.prototype.onSourceUpdate = function(value) {
+    if (value.position) {
+        this.ractive.set(this.ns('position'), value.position);
+    }
+    if (value.size) {
+        this.ractive.set(this.ns('size'), value.size);
+    }
 };
 
 BoundingControls.prototype.toggleVisibilty = function(visible) {

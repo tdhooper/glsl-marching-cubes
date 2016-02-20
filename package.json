@@ -46,7 +46,7 @@
         "src/*",
         "index.html"
       ],
-      "extensions": "js,html,vert,frag,css"
+      "extensions": "js,html,vert,frag,css,glsl"
     }
   }
 }
