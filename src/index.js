@@ -10,7 +10,7 @@ var BoundingControls = require('./controls/bounding-controls.js');
 var Editor = require('glsl-editor');
 var fs = require('fs');
 
-var example = fs.readFileSync(__dirname + '/shaders/example.glsl', 'utf8');
+var example = fs.readFileSync(__dirname + '/shaders/examples/sphere.glsl', 'utf8');
 var config = {
     container: document.getElementById('main'),
     value: example
