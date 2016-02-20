@@ -74,9 +74,15 @@ ProcessControls.prototype.forceProportions = function(component) {
 
 ProcessControls.prototype.setProportionalResolution = function(value, component) {
     var base = this.boundForComp(component);
-    this.ractive.set(this.ns('resolution.x'), Math.round((this.boundForComp('x') / base) * value));
-    this.ractive.set(this.ns('resolution.y'), Math.round((this.boundForComp('y') / base) * value));
-    this.ractive.set(this.ns('resolution.z'), Math.round((this.boundForComp('z') / base) * value));
+    var x = this.boundForComp('x');
+    var y = this.boundForComp('y');
+    var z = this.boundForComp('z');
+    if (x == undefined || y == undefined || z == undefined) {
+        return;
+    }
+    this.ractive.set(this.ns('resolution.x'), Math.round((x / base) * value));
+    this.ractive.set(this.ns('resolution.y'), Math.round((y / base) * value));
+    this.ractive.set(this.ns('resolution.z'), Math.round((z / base) * value));
 };
 
 ProcessControls.prototype.boundForComp = function(component) {
