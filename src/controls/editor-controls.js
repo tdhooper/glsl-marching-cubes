@@ -1,3 +1,4 @@
+var isEqual = require('lodash.isequal');
 
 var EditorControls = function(editor, ractive) {
     this.editor = editor;
@@ -22,6 +23,13 @@ EditorControls.prototype = {
     onBoundingUpdate: function() {
         var bounding = this.ractive.get('bounding');
         var source = this.editor.getValue();
+        var props = this.getBoundingProperties(source);
+        if (
+            isEqual(bounding.position, props.position)
+            && isEqual(bounding.size, props.size)
+        ) {
+            return;
+        }
         source = this.setBoundingProperties(source, bounding);
         if (source) {
             this.editor.setValue(source);

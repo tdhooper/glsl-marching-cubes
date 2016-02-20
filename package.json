@@ -25,6 +25,7 @@
     "glsl-tokenizer": "^2.0.2",
     "glslify": "^5.0.2",
     "jasmine": "^2.4.1",
+    "lodash.isequal": "^4.1.0",
     "normalize.css": "^3.0.3",
     "npm-watch": "^0.1.1",
     "ractive": "^0.7.3",
