@@ -5,6 +5,14 @@ body {
     margin: 0;
     height: 100%;
     background: #111;
+    font-size: 12px;
+    line-height: 14px;
+}
+
+ul {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
 }
 
 .visuallyhidden {
@@ -16,6 +24,104 @@ body {
     padding: 0;
     position: absolute;
     width: 1px;
+}
+
+
+/* Controls
+   ========================================================================== */
+
+.control-heading {
+    font-size: 14px;
+}
+
+.btn {
+    margin-top: 12px;
+}
+
+.control-section {
+    border: none;
+    padding: 0;
+    margin: 0;
+}
+
+* + .control-group {
+    margin-top: 12px;
+}
+
+.control-group--horizontal:before,
+.control-group--horizontal:after {
+    content: " ";
+    display: table;
+}
+.control-group--horizontal:after {
+    clear: both;
+}
+
+.control-group--horizontal .control-label,
+.control-group--horizontal .control-input {
+    float: left;
+}
+
+.control-group--horizontal .control-label {
+    margin-top: 6px;
+    margin-bottom: 6px;
+}
+
+.control-group--horizontal .control {
+    float: left;
+}
+
+.control-group--horizontal * + .control,
+.control-group--horizontal * + .btn {
+    margin-left: 6px;
+}
+
+.control-group--horizontal .control-input,
+.control-group--horizontal .btn {
+    margin-top: 0;
+}
+
+.control-heading {
+    margin: 0;
+    font-weight: normal;
+}
+
+* + .control-label,
+* + .control-input {
+    margin-top: 12px;
+}
+
+.control-label,
+.control-input {
+    display: inline-block;
+}
+
+.control-label {
+    margin-right: 6px;
+}
+
+.control-input--narrow {
+    width: 40px;
+}
+
+.control-input,
+.btn {
+    border-radius: 3px;
+    border: none;
+    padding: 6px;
+}
+
+.btn {
+    background: #fec418;
+    color: #2F1E2E;
+}
+
+select.control-input {
+    height: 26px;
+}
+
+.control-input[type=number] {
+    padding-right: 3px;
 }
 
 
@@ -48,9 +154,9 @@ body {
 }
 
 .editor {
-    flex-grow: 1;
     position: relative;
     overflow: hidden;
+    flex-grow: 1;
     height: 0;
     min-height: 200px;
     font-size: 80%;
@@ -90,6 +196,11 @@ body {
     display: block;
 }
 
+.control-pane,
+.control-section--examples {
+    padding: 12px;
+}
+
 
 /* Header
    ========================================================================== */
@@ -114,8 +225,13 @@ body {
 /* Edit pane
    ========================================================================== */
 
-.edit-pane {
-    background: red;
+.control-section--examples {
+    background: #71326D;
+    color: #fff;
+}
+
+.control-section--examples select.control-input {
+    background: #966393;
 }
 
 .CodeMirror {
@@ -139,25 +255,18 @@ body {
     margin-top: 12px;
 }
 
-.control-pane ul {
-    list-style-type: none;
-    padding: 0;
-    margin: 0;
-}
+.control-pane .control-section {
+    width: 33.333%;
+    min-width: 170px;
+    box-sizing: border-box;
+    float: left;
 
-.control-heading {
-    font-size: 14px;
-}
-
-.btn {
-    margin-top: 12px;
+    margin-bottom: 24px;
 }
 
 .control-pane {
     background: #33554f;
     color: #eee;
-    padding: 12px;
-    font-size: 12px;
 }
 
 .progress {
@@ -169,85 +278,12 @@ body {
     color: #2F1E2E;
 }
 
-.control-section {
-    border: none;
-    padding: 0;
-    margin: 0;
-
-    width: 33.333%;
-    min-width: 170px;
-    box-sizing: border-box;
-    float: left;
-
-    margin-bottom: 24px;
-}
-
-
-* + .control-group {
-    margin-top: 1em;
-}
-
-.control-group--horizontal:before,
-.control-group--horizontal:after {
-    content: " ";
-    display: table;
-}
-.control-group--horizontal:after {
-    clear: both;
-}
-
-.control-group--horizontal .control {
-    float: left;
-}
-
-.control-group--horizontal .control + .control {
-    margin-left: 6px;
-}
-
-.control-heading {
-    margin: 0;
-    font-weight: normal;
-}
-
-.control-label,
-.control-input {
-    display: inline-block;
-    margin-top: 1em;
-}
-
-.control-label {
-    margin-right: 3px;
-}
-
-.control-input {
-    width: 100px;
-}
-
-.control-input--narrow {
-    width: 40px;
-}
-
-input,
-button {
-    border: none;
-    padding: 6px;
-}
-
-input {
+.control-pane .control-input {
     background: #437568;
 }
 
-button {
-    background: #fec418;   
-    color: #2F1E2E;
-}
-
-input[type=number] {
-    padding-right: 3px;
-}
-
-input[disabled],
-button[disabled] {
+.control-pane .control-input[disabled],
+.control-pane .btn[disabled] {
     background: #222;
     color: #666;
 }

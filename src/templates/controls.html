@@ -1,19 +1,21 @@
 <div class="edit-pane" id="edit-pane">
-    <div class="examples">
-        <div class="control">
-            <label class="control-label" for="examples-list">Examples</label>
-            <select
-                class="control-input"
-                id="examples-list"
-                value="{{ examples.selected }}"
-            >
-                {{#examples.list:i}}
-                    <option value="{{ i }}">{{ name }}</option>
-                {{/examples.list}}
-            </select>
-            <button on-click='examples.load'>Load</button>
+    <fieldset class="control-section control-section--examples">
+        <div class="control-group control-group--horizontal">
+            <div class="control">
+                <label class="control-label control-heading" for="examples-list">Examples:</label>
+                <select
+                    class="control-input control-input--select"
+                    id="examples-list"
+                    value="{{ examples.selected }}"
+                >
+                    {{#examples.list:i}}
+                        <option value="{{ i }}">{{ name }}</option>
+                    {{/examples.list}}
+                </select>
+            </div>
+            <button class="btn" on-click='examples.load'>Load</button>
         </div>
-    </div>
+    </fieldset>
 </div>
 
 <div class="control-pane">
@@ -23,75 +25,71 @@
     <fieldset class="control-section">
         <h3 class="control-heading">Bounding box</h3>
 
-        <div class="control-group control-group--horizontal">
-            <h4>Position</h4>
-            <ul>
-                <li class="control">
-                    <label class="control-label visuallyhidden" for="bounding-x">x</label>
-                    <input
-                        class="control-input control-input--narrow"
-                        id="bounding-x"
-                        type="number"
-                        step=".1"
-                        value="{{ bounding.position.x }}"
-                    >
-                </li>
-                <li class="control">
-                    <label class="control-label visuallyhidden" for="bounding-y">y</label>
-                    <input
-                        class="control-input control-input--narrow"
-                        id="bounding-y"
-                        type="number"
-                        step=".1"
-                        value="{{ bounding.position.y }}"
-                    >
-                <li class="control">
-                    <label class="control-label visuallyhidden" for="bounding-z">z</label>
-                    <input
-                        class="control-input control-input--narrow"
-                        id="bounding-z"
-                        type="number"
-                        step=".1"
-                        value="{{ bounding.position.z }}"
-                    >
-                </li>
-            </ul>
-        </div>
+        <h4>Position</h4>
+        <ul class="control-group control-group--horizontal">
+            <li class="control">
+                <label class="control-label visuallyhidden" for="bounding-x">x</label>
+                <input
+                    class="control-input control-input--narrow"
+                    id="bounding-x"
+                    type="number"
+                    step=".1"
+                    value="{{ bounding.position.x }}"
+                >
+            </li>
+            <li class="control">
+                <label class="control-label visuallyhidden" for="bounding-y">y</label>
+                <input
+                    class="control-input control-input--narrow"
+                    id="bounding-y"
+                    type="number"
+                    step=".1"
+                    value="{{ bounding.position.y }}"
+                >
+            <li class="control">
+                <label class="control-label visuallyhidden" for="bounding-z">z</label>
+                <input
+                    class="control-input control-input--narrow"
+                    id="bounding-z"
+                    type="number"
+                    step=".1"
+                    value="{{ bounding.position.z }}"
+                >
+            </li>
+        </ul>
 
-        <div class="control-group control-group--horizontal">
-            <h4>Size</h4>
-            <ul>
-                <li class="control">
-                    <label class="control-label visuallyhidden" for="bounding-w">w</label>
-                    <input
-                        class="control-input control-input--narrow"
-                        id="bounding-w"
-                        type="number"
-                        step=".1"
-                        value="{{ bounding.size.width }}"
-                    >
-                </li>
-                <li class="control">
-                    <label class="control-label visuallyhidden" for="bounding-h">h</label>
-                    <input
-                        class="control-input control-input--narrow"
-                        id="bounding-h"
-                        type="number"
-                        step=".1"
-                        value="{{ bounding.size.height }}"
-                    >
-                <li class="control">
-                    <label class="control-label visuallyhidden" for="bounding-d">d</label>
-                    <input
-                        class="control-input control-input--narrow"
-                        id="bounding-d"
-                        type="number"
-                        step=".1"
-                        value="{{ bounding.size.depth }}"
-                    >
-                </li>
-            </ul>
-        </div>
+        <h4>Size</h4>
+        <ul class="control-group control-group--horizontal">
+            <li class="control">
+                <label class="control-label visuallyhidden" for="bounding-w">w</label>
+                <input
+                    class="control-input control-input--narrow"
+                    id="bounding-w"
+                    type="number"
+                    step=".1"
+                    value="{{ bounding.size.width }}"
+                >
+            </li>
+            <li class="control">
+                <label class="control-label visuallyhidden" for="bounding-h">h</label>
+                <input
+                    class="control-input control-input--narrow"
+                    id="bounding-h"
+                    type="number"
+                    step=".1"
+                    value="{{ bounding.size.height }}"
+                >
+            <li class="control">
+                <label class="control-label visuallyhidden" for="bounding-d">d</label>
+                <input
+                    class="control-input control-input--narrow"
+                    id="bounding-d"
+                    type="number"
+                    step=".1"
+                    value="{{ bounding.size.depth }}"
+                >
+            </li>
+        </ul>
 
         <div class="control">
             <input
@@ -115,7 +113,7 @@
             >
             <label class="control-label" for="preview-proportional">Proportional</label>
         </div>
-        <ul class="control-group--horizontal">
+        <ul class="control-group control-group--horizontal">
             <li class="control">
                 <label class="control-label visuallyhidden" for="preview-x">x</label>
                 <input
@@ -175,7 +173,7 @@
             >
             <label class="control-label" for="download-proportional">Proportional</label>
         </div>
-        <ul class="control-group--horizontal">
+        <ul class="control-group control-group--horizontal">
             <li class="control">
                 <label class="control-label visuallyhidden" for="download-x">x</label>
                 <input
