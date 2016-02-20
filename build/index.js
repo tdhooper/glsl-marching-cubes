@@ -70447,7 +70447,7 @@ var state = {
             source: "\n// BOUNDING_BOX_POSITION 0 0 0\n// BOUNDING_BOX_SIZE 2.5 2.1 2.2\n\nfloat vmax(vec3 v) {\n  return max(max(v.x, v.y), v.z);\n}\n\nfloat fBox(vec3 p, vec3 b) {\n  vec3 d = abs(p) - b;\n  return length(max(d, vec3(0))) + vmax(min(d, vec3(0)));\n}\n\nvoid pR(inout vec2 p, float a) {\n  p = cos(a)*p + sin(a)*vec2(p.y, -p.x);\n}\n\n// Your glsl signed distance function:\n\nfloat mapDistance(vec3 p) {\n  pR(p.xy, 0.2);\n  pR(p.xz, 0.4);\n  return fBox(p, vec3(.8, .8, .8));\n}\n"
         },{
             name: 'Sine Waves',
-            source: "\n// BOUNDING_BOX_POSITION 0 0 0\n// BOUNDING_BOX_SIZE 10 10 10\n\n// Your glsl signed distance function:\n\nfloat mapDistance(vec3 p) {\n  return sin(p.x) + sin(p.y) + sin(p.z);\n}\n"
+            source: "\n// BOUNDING_BOX_POSITION 0 0 0\n// BOUNDING_BOX_SIZE 3 3 3\n\n// Your glsl signed distance function:\n\nfloat mapDistance(vec3 p) {\n  p *= 5.;\n  return sin(p.x) + sin(p.y) + sin(p.z);\n}\n"
         },{
             name: 'Torus',
             source: "\n// BOUNDING_BOX_POSITION 0 0 0\n// BOUNDING_BOX_SIZE 1.6 0.6 1.6\n\nfloat fTorus(vec3 p, float smallRadius, float largeRadius) {\n    return length(vec2(length(p.xz) - largeRadius, p.y)) - smallRadius;\n}\n\n// Your glsl signed distance function:\n\nfloat mapDistance(vec3 p) {\n    return fTorus(p, 0.25, 0.5);\n}\n"
