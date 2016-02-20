@@ -37,10 +37,20 @@ body {
     min-height: 100%;
 }
 
+.edit-pane {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+}
+
+.control-pane {
+    flex-grow: 0;
+}
+
 .editor {
+    flex-grow: 1;
     position: relative;
     overflow: hidden;
-    flex-grow: 1;
     height: 0;
     min-height: 200px;
     font-size: 80%;
@@ -50,10 +60,6 @@ body {
     height: 100% !important;
     width: 100% !important;
     position: absolute !important;
-}
-
-.controls {
-    flex-grow: 0;
 }
 
 #scene,
@@ -105,8 +111,12 @@ body {
 }
 
 
-/* Editor
+/* Edit pane
    ========================================================================== */
+
+.edit-pane {
+    background: red;
+}
 
 .CodeMirror {
     font-size: 13px !important;
@@ -116,20 +126,20 @@ body {
 /* Process controls
    ========================================================================== */
 
-.controls {
+.control-pane {
     font-size: 12px;
 }
 
-.controls h4 {
+.control-pane h4 {
     margin: 0;
     font-size: inherit;
 }
 
-.controls * + h4 {
+.control-pane * + h4 {
     margin-top: 12px;
 }
 
-.controls ul {
+.control-pane ul {
     list-style-type: none;
     padding: 0;
     margin: 0;
@@ -143,7 +153,7 @@ body {
     margin-top: 12px;
 }
 
-.controls {
+.control-pane {
     background: #33554f;
     color: #eee;
     padding: 12px;

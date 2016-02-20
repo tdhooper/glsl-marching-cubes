@@ -1,4 +1,22 @@
-<div class="controls">
+<div class="edit-pane" id="edit-pane">
+    <div class="examples">
+        <div class="control">
+            <label class="control-label" for="examples-list">Examples</label>
+            <select
+                class="control-input"
+                id="examples-list"
+                value="{{ examples.selected }}"
+            >
+                {{#examples.list:i}}
+                    <option value="{{ i }}">{{ name }}</option>
+                {{/examples.list}}
+            </select>
+            <button on-click='examples.load'>Load</button>
+        </div>
+    </div>
+</div>
+
+<div class="control-pane">
 
     <p class="progress">{{{ progress }}}</p>
 
