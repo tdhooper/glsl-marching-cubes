@@ -23,7 +23,9 @@ EditorControls.prototype = {
         var bounding = this.ractive.get('bounding');
         var source = this.editor.getValue();
         source = this.setBoundingProperties(source, bounding);
-        this.editor.setValue(source);
+        if (source) {
+            this.editor.setValue(source);
+        }
     },
 
     load: function() {
@@ -41,7 +43,9 @@ EditorControls.prototype = {
 
     setBoundingProperties: function(source, props) {
         source = this.setBoundingPosition(source, props.position);
-        source = this.setBoundingSize(source, props.size);
+        if (source) {
+            source = this.setBoundingSize(source, props.size);
+        }
         return source;
     },
 
@@ -104,6 +108,9 @@ EditorControls.prototype = {
     },
 
     setBoundingValue: function(name, source, values) {
+        if (values[0] == undefined || values[1] == undefined || values[2] == undefined) {
+            return;
+        }
         var re = new RegExp('(' + name + '\\s+)[-\\d\\.]+(\\s+)[-\\d\\.]+(\\s+)[-\\d\\.]+');
         return source.replace(re, '$1'+values[0]+'$2'+values[1]+'$3'+values[2]);
     }
