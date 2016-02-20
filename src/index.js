@@ -7,7 +7,7 @@ var Ractive = require('ractive');
 var PreviewControls = require('./controls/preview-controls.js');
 var DownloadControls = require('./controls/download-controls.js');
 var BoundingControls = require('./controls/bounding-controls.js');
-var ExampleControls = require('./controls/example-controls.js');
+var EditorControls = require('./controls/editor-controls.js');
 var Editor = require('glsl-editor');
 var fs = require('fs');
 
@@ -107,15 +107,14 @@ require('glsl-editor/theme');
 
 window.addEventListener('resize', editor.resize.bind(editor), false);
 
-
 // Controls
 
 var previewControls = new PreviewControls(cubeMarch, renderer, editor, ractive);
 var downloadControls = new DownloadControls(cubeMarch, exporter, editor, ractive);
 var boundingControls = new BoundingControls(renderer, ractive);
-var exampleControls = new ExampleControls(editor, ractive);
+var editorControls = new EditorControls(editor, ractive);
 
 previewControls.init();
 downloadControls.init();
 boundingControls.init();
-exampleControls.init();
+editorControls.init();

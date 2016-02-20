@@ -31,10 +31,14 @@ BoundingControls.prototype.onUpdate = function() {
 
 BoundingControls.prototype.onSourceUpdate = function(value) {
     if (value.position) {
-        this.ractive.set(this.ns('position'), value.position);
+        this.ractive.set(this.ns('position.x'), value.position.x);
+        this.ractive.set(this.ns('position.y'), value.position.y);
+        this.ractive.set(this.ns('position.z'), value.position.z);
     }
     if (value.size) {
-        this.ractive.set(this.ns('size'), value.size);
+        this.ractive.set(this.ns('size.width'), value.size.width);
+        this.ractive.set(this.ns('size.height'), value.size.height);
+        this.ractive.set(this.ns('size.depth'), value.size.depth);
     }
 };
 
