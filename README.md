@@ -29,5 +29,5 @@ I tried running the entire marching cubes algorithm on the GPU, but the cost and
 
 The JavaScript marching cubes implementation this is based on<sup>[2](#user-content-fn2)</sup> runs much faster for simple models. I haven’t compared them for more complex models.
 
-* <a id="fn1">1</a> https://github.com/mikolalysenko/isosurface
-* <a id=“fn2”>2</a> https://github.com/mikolalysenko/glsl-read-float
+* <a id=“fn2”>1</a> https://github.com/mikolalysenko/glsl-read-float
+* <a id="fn1">2</a> https://github.com/mikolalysenko/isosurface
