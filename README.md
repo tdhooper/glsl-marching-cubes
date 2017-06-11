@@ -4,6 +4,13 @@ Extract an STL from a glsl distance function
 
 http://tdhooper.github.io/glsl-marching-cubes/
 
+## Limitations
+
+* Large meshes will be saved in parts, you can re-combine them [MeshLab](http://www.meshlab.net)
+* You might get some missing triangles (holes) in the mesh
+
+If you have a Mac, check out [F3](http://www.syedrezaali.com/f3-mac-app/) which does this a LOT better.
+
 ## Tools used
 
 * [three.js](http://threejs.org/)
