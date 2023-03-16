@@ -25,6 +25,7 @@ CubeMarch.prototype.setVolume = function(dims, bounds) {
     var size = Math.ceil(Math.sqrt(vertexCount));
     scene.resize(size, size);
     var maxSize = scene.gl.drawingBufferWidth;
+    maxSize = Math.min(maxSize, 4096); // Even though GPUs can go over this, things get weird
     // maxSize /= 2;
     // maxSize = 60;
 
