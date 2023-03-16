@@ -49,5 +49,8 @@
       ],
       "extensions": "js,html,vert,frag,css,glsl"
     }
+  },
+  "devDependencies": {
+    "browserify": "^17.0.0"
   }
 }
