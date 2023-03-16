@@ -1,549 +1,4 @@
-(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-/* FileSaver.js
- * A saveAs() FileSaver implementation.
- * 1.1.20150716
- *
- * By Eli Grey, http://eligrey.com
- * License: X11/MIT
- *   See https://github.com/eligrey/FileSaver.js/blob/master/LICENSE.md
- */
-
-/*global self */
-/*jslint bitwise: true, indent: 4, laxbreak: true, laxcomma: true, smarttabs: true, plusplus: true */
-
-/*! @source http://purl.eligrey.com/github/FileSaver.js/blob/master/FileSaver.js */
-
-var saveAs = saveAs || (function(view) {
-	"use strict";
-	// IE <10 is explicitly unsupported
-	if (typeof navigator !== "undefined" && /MSIE [1-9]\./.test(navigator.userAgent)) {
-		return;
-	}
-	var
-		  doc = view.document
-		  // only get URL when necessary in case Blob.js hasn't overridden it yet
-		, get_URL = function() {
-			return view.URL || view.webkitURL || view;
-		}
-		, save_link = doc.createElementNS("http://www.w3.org/1999/xhtml", "a")
-		, can_use_save_link = "download" in save_link
-		, click = function(node) {
-			var event = new MouseEvent("click");
-			node.dispatchEvent(event);
-		}
-		, webkit_req_fs = view.webkitRequestFileSystem
-		, req_fs = view.requestFileSystem || webkit_req_fs || view.mozRequestFileSystem
-		, throw_outside = function(ex) {
-			(view.setImmediate || view.setTimeout)(function() {
-				throw ex;
-			}, 0);
-		}
-		, force_saveable_type = "application/octet-stream"
-		, fs_min_size = 0
-		// See https://code.google.com/p/chromium/issues/detail?id=375297#c7 and
-		// https://github.com/eligrey/FileSaver.js/commit/485930a#commitcomment-8768047
-		// for the reasoning behind the timeout and revocation flow
-		, arbitrary_revoke_timeout = 500 // in ms
-		, revoke = function(file) {
-			var revoker = function() {
-				if (typeof file === "string") { // file is an object URL
-					get_URL().revokeObjectURL(file);
-				} else { // file is a File
-					file.remove();
-				}
-			};
-			if (view.chrome) {
-				revoker();
-			} else {
-				setTimeout(revoker, arbitrary_revoke_timeout);
-			}
-		}
-		, dispatch = function(filesaver, event_types, event) {
-			event_types = [].concat(event_types);
-			var i = event_types.length;
-			while (i--) {
-				var listener = filesaver["on" + event_types[i]];
-				if (typeof listener === "function") {
-					try {
-						listener.call(filesaver, event || filesaver);
-					} catch (ex) {
-						throw_outside(ex);
-					}
-				}
-			}
-		}
-		, auto_bom = function(blob) {
-			// prepend BOM for UTF-8 XML and text/* types (including HTML)
-			if (/^\s*(?:text\/\S*|application\/xml|\S*\/\S*\+xml)\s*;.*charset\s*=\s*utf-8/i.test(blob.type)) {
-				return new Blob(["\ufeff", blob], {type: blob.type});
-			}
-			return blob;
-		}
-		, FileSaver = function(blob, name, no_auto_bom) {
-			if (!no_auto_bom) {
-				blob = auto_bom(blob);
-			}
-			// First try a.download, then web filesystem, then object URLs
-			var
-				  filesaver = this
-				, type = blob.type
-				, blob_changed = false
-				, object_url
-				, target_view
-				, dispatch_all = function() {
-					dispatch(filesaver, "writestart progress write writeend".split(" "));
-				}
-				// on any filesys errors revert to saving with object URLs
-				, fs_error = function() {
-					// don't create more object URLs than needed
-					if (blob_changed || !object_url) {
-						object_url = get_URL().createObjectURL(blob);
-					}
-					if (target_view) {
-						target_view.location.href = object_url;
-					} else {
-						var new_tab = view.open(object_url, "_blank");
-						if (new_tab == undefined && typeof safari !== "undefined") {
-							//Apple do not allow window.open, see http://bit.ly/1kZffRI
-							view.location.href = object_url
-						}
-					}
-					filesaver.readyState = filesaver.DONE;
-					dispatch_all();
-					revoke(object_url);
-				}
-				, abortable = function(func) {
-					return function() {
-						if (filesaver.readyState !== filesaver.DONE) {
-							return func.apply(this, arguments);
-						}
-					};
-				}
-				, create_if_not_found = {create: true, exclusive: false}
-				, slice
-			;
-			filesaver.readyState = filesaver.INIT;
-			if (!name) {
-				name = "download";
-			}
-			if (can_use_save_link) {
-				object_url = get_URL().createObjectURL(blob);
-				save_link.href = object_url;
-				save_link.download = name;
-				setTimeout(function() {
-					click(save_link);
-					dispatch_all();
-					revoke(object_url);
-					filesaver.readyState = filesaver.DONE;
-				});
-				return;
-			}
-			// Object and web filesystem URLs have a problem saving in Google Chrome when
-			// viewed in a tab, so I force save with application/octet-stream
-			// http://code.google.com/p/chromium/issues/detail?id=91158
-			// Update: Google errantly closed 91158, I submitted it again:
-			// https://code.google.com/p/chromium/issues/detail?id=389642
-			if (view.chrome && type && type !== force_saveable_type) {
-				slice = blob.slice || blob.webkitSlice;
-				blob = slice.call(blob, 0, blob.size, force_saveable_type);
-				blob_changed = true;
-			}
-			// Since I can't be sure that the guessed media type will trigger a download
-			// in WebKit, I append .download to the filename.
-			// https://bugs.webkit.org/show_bug.cgi?id=65440
-			if (webkit_req_fs && name !== "download") {
-				name += ".download";
-			}
-			if (type === force_saveable_type || webkit_req_fs) {
-				target_view = view;
-			}
-			if (!req_fs) {
-				fs_error();
-				return;
-			}
-			fs_min_size += blob.size;
-			req_fs(view.TEMPORARY, fs_min_size, abortable(function(fs) {
-				fs.root.getDirectory("saved", create_if_not_found, abortable(function(dir) {
-					var save = function() {
-						dir.getFile(name, create_if_not_found, abortable(function(file) {
-							file.createWriter(abortable(function(writer) {
-								writer.onwriteend = function(event) {
-									target_view.location.href = file.toURL();
-									filesaver.readyState = filesaver.DONE;
-									dispatch(filesaver, "writeend", event);
-									revoke(file);
-								};
-								writer.onerror = function() {
-									var error = writer.error;
-									if (error.code !== error.ABORT_ERR) {
-										fs_error();
-									}
-								};
-								"writestart progress write abort".split(" ").forEach(function(event) {
-									writer["on" + event] = filesaver["on" + event];
-								});
-								writer.write(blob);
-								filesaver.abort = function() {
-									writer.abort();
-									filesaver.readyState = filesaver.DONE;
-								};
-								filesaver.readyState = filesaver.WRITING;
-							}), fs_error);
-						}), fs_error);
-					};
-					dir.getFile(name, {create: false}, abortable(function(file) {
-						// delete file if it already exists
-						file.remove();
-						save();
-					}), abortable(function(ex) {
-						if (ex.code === ex.NOT_FOUND_ERR) {
-							save();
-						} else {
-							fs_error();
-						}
-					}));
-				}), fs_error);
-			}), fs_error);
-		}
-		, FS_proto = FileSaver.prototype
-		, saveAs = function(blob, name, no_auto_bom) {
-			return new FileSaver(blob, name, no_auto_bom);
-		}
-	;
-	// IE 10+ (native saveAs)
-	if (typeof navigator !== "undefined" && navigator.msSaveOrOpenBlob) {
-		return function(blob, name, no_auto_bom) {
-			if (!no_auto_bom) {
-				blob = auto_bom(blob);
-			}
-			return navigator.msSaveOrOpenBlob(blob, name || "download");
-		};
-	}
-
-	FS_proto.abort = function() {
-		var filesaver = this;
-		filesaver.readyState = filesaver.DONE;
-		dispatch(filesaver, "abort");
-	};
-	FS_proto.readyState = FS_proto.INIT = 0;
-	FS_proto.WRITING = 1;
-	FS_proto.DONE = 2;
-
-	FS_proto.error =
-	FS_proto.onwritestart =
-	FS_proto.onprogress =
-	FS_proto.onwrite =
-	FS_proto.onabort =
-	FS_proto.onerror =
-	FS_proto.onwriteend =
-		null;
-
-	return saveAs;
-}(
-	   typeof self !== "undefined" && self
-	|| typeof window !== "undefined" && window
-	|| this.content
-));
-// `self` is undefined in Firefox for Android content script context
-// while `this` is nsIContentFrameMessageManager
-// with an attribute `content` that corresponds to the window
-
-if (typeof module !== "undefined" && module.exports) {
-  module.exports.saveAs = saveAs;
-} else if ((typeof define !== "undefined" && define !== null) && (define.amd != null)) {
-  define([], function() {
-    return saveAs;
-  });
-}
-
-},{}],2:[function(require,module,exports){
-module.exports = require("insert-css")("/* BASICS */\n\n.CodeMirror {\n  /* Set height, width, borders, and global font properties here */\n  font-family: monospace;\n  height: 300px;\n}\n\n/* PADDING */\n\n.CodeMirror-lines {\n  padding: 4px 0; /* Vertical padding around content */\n}\n.CodeMirror pre {\n  padding: 0 4px; /* Horizontal padding of content */\n}\n\n.CodeMirror-scrollbar-filler, .CodeMirror-gutter-filler {\n  background-color: white; /* The little square between H and V scrollbars */\n}\n\n/* GUTTER */\n\n.CodeMirror-gutters {\n  border-right: 1px solid #ddd;\n  background-color: #f7f7f7;\n  white-space: nowrap;\n}\n.CodeMirror-linenumbers {}\n.CodeMirror-linenumber {\n  padding: 0 3px 0 5px;\n  min-width: 20px;\n  text-align: right;\n  color: #999;\n  -moz-box-sizing: content-box;\n  box-sizing: content-box;\n}\n\n.CodeMirror-guttermarker { color: black; }\n.CodeMirror-guttermarker-subtle { color: #999; }\n\n/* CURSOR */\n\n.CodeMirror div.CodeMirror-cursor {\n  border-left: 1px solid black;\n}\n/* Shown when moving in bi-directional text */\n.CodeMirror div.CodeMirror-secondarycursor {\n  border-left: 1px solid silver;\n}\n.CodeMirror.cm-fat-cursor div.CodeMirror-cursor {\n  width: auto;\n  border: 0;\n  background: #7e7;\n}\n.CodeMirror.cm-fat-cursor div.CodeMirror-cursors {\n  z-index: 1;\n}\n\n.cm-animate-fat-cursor {\n  width: auto;\n  border: 0;\n  -webkit-animation: blink 1.06s steps(1) infinite;\n  -moz-animation: blink 1.06s steps(1) infinite;\n  animation: blink 1.06s steps(1) infinite;\n}\n@-moz-keyframes blink {\n  0% { background: #7e7; }\n  50% { background: none; }\n  100% { background: #7e7; }\n}\n@-webkit-keyframes blink {\n  0% { background: #7e7; }\n  50% { background: none; }\n  100% { background: #7e7; }\n}\n@keyframes blink {\n  0% { background: #7e7; }\n  50% { background: none; }\n  100% { background: #7e7; }\n}\n\n/* Can style cursor different in overwrite (non-insert) mode */\ndiv.CodeMirror-overwrite div.CodeMirror-cursor {}\n\n.cm-tab { display: inline-block; text-decoration: inherit; }\n\n.CodeMirror-ruler {\n  border-left: 1px solid #ccc;\n  position: absolute;\n}\n\n/* DEFAULT THEME */\n\n.cm-s-default .cm-keyword {color: #708;}\n.cm-s-default .cm-atom {color: #219;}\n.cm-s-default .cm-number {color: #164;}\n.cm-s-default .cm-def {color: #00f;}\n.cm-s-default .cm-variable,\n.cm-s-default .cm-punctuation,\n.cm-s-default .cm-property,\n.cm-s-default .cm-operator {}\n.cm-s-default .cm-variable-2 {color: #05a;}\n.cm-s-default .cm-variable-3 {color: #085;}\n.cm-s-default .cm-comment {color: #a50;}\n.cm-s-default .cm-string {color: #a11;}\n.cm-s-default .cm-string-2 {color: #f50;}\n.cm-s-default .cm-meta {color: #555;}\n.cm-s-default .cm-qualifier {color: #555;}\n.cm-s-default .cm-builtin {color: #30a;}\n.cm-s-default .cm-bracket {color: #997;}\n.cm-s-default .cm-tag {color: #170;}\n.cm-s-default .cm-attribute {color: #00c;}\n.cm-s-default .cm-header {color: blue;}\n.cm-s-default .cm-quote {color: #090;}\n.cm-s-default .cm-hr {color: #999;}\n.cm-s-default .cm-link {color: #00c;}\n\n.cm-negative {color: #d44;}\n.cm-positive {color: #292;}\n.cm-header, .cm-strong {font-weight: bold;}\n.cm-em {font-style: italic;}\n.cm-link {text-decoration: underline;}\n.cm-strikethrough {text-decoration: line-through;}\n\n.cm-s-default .cm-error {color: #f00;}\n.cm-invalidchar {color: #f00;}\n\n/* Default styles for common addons */\n\ndiv.CodeMirror span.CodeMirror-matchingbracket {color: #0f0;}\ndiv.CodeMirror span.CodeMirror-nonmatchingbracket {color: #f22;}\n.CodeMirror-matchingtag { background: rgba(255, 150, 0, .3); }\n.CodeMirror-activeline-background {background: #e8f2ff;}\n\n/* STOP */\n\n/* The rest of this file contains styles related to the mechanics of\n   the editor. You probably shouldn't touch them. */\n\n.CodeMirror {\n  line-height: 1;\n  position: relative;\n  overflow: hidden;\n  background: white;\n  color: black;\n}\n\n.CodeMirror-scroll {\n  overflow: scroll !important; /* Things will break if this is overridden */\n  /* 30px is the magic margin used to hide the element's real scrollbars */\n  /* See overflow: hidden in .CodeMirror */\n  margin-bottom: -30px; margin-right: -30px;\n  padding-bottom: 30px;\n  height: 100%;\n  outline: none; /* Prevent dragging from highlighting the element */\n  position: relative;\n  -moz-box-sizing: content-box;\n  box-sizing: content-box;\n}\n.CodeMirror-sizer {\n  position: relative;\n  border-right: 30px solid transparent;\n  -moz-box-sizing: content-box;\n  box-sizing: content-box;\n}\n\n/* The fake, visible scrollbars. Used to force redraw during scrolling\n   before actuall scrolling happens, thus preventing shaking and\n   flickering artifacts. */\n.CodeMirror-vscrollbar, .CodeMirror-hscrollbar, .CodeMirror-scrollbar-filler, .CodeMirror-gutter-filler {\n  position: absolute;\n  z-index: 6;\n  display: none;\n}\n.CodeMirror-vscrollbar {\n  right: 0; top: 0;\n  overflow-x: hidden;\n  overflow-y: scroll;\n}\n.CodeMirror-hscrollbar {\n  bottom: 0; left: 0;\n  overflow-y: hidden;\n  overflow-x: scroll;\n}\n.CodeMirror-scrollbar-filler {\n  right: 0; bottom: 0;\n}\n.CodeMirror-gutter-filler {\n  left: 0; bottom: 0;\n}\n\n.CodeMirror-gutters {\n  position: absolute; left: 0; top: 0;\n  z-index: 3;\n}\n.CodeMirror-gutter {\n  white-space: normal;\n  height: 100%;\n  -moz-box-sizing: content-box;\n  box-sizing: content-box;\n  display: inline-block;\n  margin-bottom: -30px;\n  /* Hack to make IE7 behave */\n  *zoom:1;\n  *display:inline;\n}\n.CodeMirror-gutter-wrapper {\n  position: absolute;\n  z-index: 4;\n  height: 100%;\n}\n.CodeMirror-gutter-elt {\n  position: absolute;\n  cursor: default;\n  z-index: 4;\n}\n\n.CodeMirror-lines {\n  cursor: text;\n  min-height: 1px; /* prevents collapsing before first draw */\n}\n.CodeMirror pre {\n  /* Reset some styles that the rest of the page might have set */\n  -moz-border-radius: 0; -webkit-border-radius: 0; border-radius: 0;\n  border-width: 0;\n  background: transparent;\n  font-family: inherit;\n  font-size: inherit;\n  margin: 0;\n  white-space: pre;\n  word-wrap: normal;\n  line-height: inherit;\n  color: inherit;\n  z-index: 2;\n  position: relative;\n  overflow: visible;\n}\n.CodeMirror-wrap pre {\n  word-wrap: break-word;\n  white-space: pre-wrap;\n  word-break: normal;\n}\n\n.CodeMirror-linebackground {\n  position: absolute;\n  left: 0; right: 0; top: 0; bottom: 0;\n  z-index: 0;\n}\n\n.CodeMirror-linewidget {\n  position: relative;\n  z-index: 2;\n  overflow: auto;\n}\n\n.CodeMirror-widget {}\n\n.CodeMirror-measure {\n  position: absolute;\n  width: 100%;\n  height: 0;\n  overflow: hidden;\n  visibility: hidden;\n}\n.CodeMirror-measure pre { position: static; }\n\n.CodeMirror div.CodeMirror-cursor {\n  position: absolute;\n  border-right: none;\n  width: 0;\n}\n\ndiv.CodeMirror-cursors {\n  visibility: hidden;\n  position: relative;\n  z-index: 3;\n}\n.CodeMirror-focused div.CodeMirror-cursors {\n  visibility: visible;\n}\n\n.CodeMirror-selected { background: #d9d9d9; }\n.CodeMirror-focused .CodeMirror-selected { background: #d7d4f0; }\n.CodeMirror-crosshair { cursor: crosshair; }\n\n.cm-searching {\n  background: #ffa;\n  background: rgba(255, 255, 0, .4);\n}\n\n/* IE7 hack to prevent it from returning funny offsetTops on the spans */\n.CodeMirror span { *vertical-align: text-bottom; }\n\n/* Used to force a border model for a node */\n.cm-force-border { padding-right: .1px; }\n\n@media print {\n  /* Hide the cursor when printing */\n  .CodeMirror div.CodeMirror-cursors {\n    visibility: hidden;\n  }\n}\n\n/* See issue #2901 */\n.cm-tab-wrap-hack:after { content: ''; }\n\n/* Help users use markselection to safely style text background */\nspan.CodeMirror-selectedtext { background: none; }\n")
-},{"insert-css":9}],3:[function(require,module,exports){
-module.exports = function(CodeMirror) {
-  CodeMirror.defineMode("glsl", function(config, parserConfig) {
-    var indentUnit = config.indentUnit,
-        keywords = parserConfig.keywords || words(glslKeywords),
-        builtins = parserConfig.builtins || words(glslBuiltins),
-        blockKeywords = parserConfig.blockKeywords || words("case do else for if switch while struct"),
-        atoms = parserConfig.atoms || words("null"),
-        hooks = parserConfig.hooks || {},
-        multiLineStrings = parserConfig.multiLineStrings;
-    var isOperatorChar = /[+\-*&%=<>!?|\/]/;
-
-    var curPunc;
-
-    function tokenBase(stream, state) {
-      var ch = stream.next();
-      if (hooks[ch]) {
-        var result = hooks[ch](stream, state);
-        if (result !== false) return result;
-      }
-      if (ch == '"' || ch == "'") {
-        state.tokenize = tokenString(ch);
-        return state.tokenize(stream, state);
-      }
-      if (/[\[\]{}\(\),;\:\.]/.test(ch)) {
-        curPunc = ch;
-        return "bracket";
-      }
-      if (/\d/.test(ch)) {
-        stream.eatWhile(/[\w\.]/);
-        return "number";
-      }
-      if (ch == "/") {
-        if (stream.eat("*")) {
-          state.tokenize = tokenComment;
-          return tokenComment(stream, state);
-        }
-        if (stream.eat("/")) {
-          stream.skipToEnd();
-          return "comment";
-        }
-      }
-      if (ch == "#") {
-        stream.eatWhile(/[\S]+/);
-        stream.eatWhile(/[\s]+/);
-        stream.eatWhile(/[\S]+/);
-        stream.eatWhile(/[\s]+/);
-        return "comment";
-      }
-      if (isOperatorChar.test(ch)) {
-        stream.eatWhile(isOperatorChar);
-        return "operator";
-      }
-      stream.eatWhile(/[\w\$_]/);
-      var cur = stream.current();
-      if (keywords.propertyIsEnumerable(cur)) {
-        if (blockKeywords.propertyIsEnumerable(cur)) curPunc = "newstatement";
-        return "keyword";
-      }
-      if (builtins.propertyIsEnumerable(cur)) {
-        return "builtin";
-      }
-      if (atoms.propertyIsEnumerable(cur)) return "atom";
-      return "word";
-    }
-
-    function tokenString(quote) {
-      return function(stream, state) {
-        var escaped = false, next, end = false;
-        while ((next = stream.next()) != null) {
-          if (next == quote && !escaped) {end = true; break;}
-          escaped = !escaped && next == "\\";
-        }
-        if (end || !(escaped || multiLineStrings))
-          state.tokenize = tokenBase;
-        return "string";
-      };
-    }
-
-    function tokenComment(stream, state) {
-      var maybeEnd = false, ch;
-      while (ch = stream.next()) {
-        if (ch == "/" && maybeEnd) {
-          state.tokenize = tokenBase;
-          break;
-        }
-        maybeEnd = (ch == "*");
-      }
-      return "comment";
-    }
-
-    function Context(indented, column, type, align, prev) {
-      this.indented = indented;
-      this.column = column;
-      this.type = type;
-      this.align = align;
-      this.prev = prev;
-    }
-    function pushContext(state, col, type) {
-      return state.context = new Context(state.indented, col, type, null, state.context);
-    }
-    function popContext(state) {
-      var t = state.context.type;
-      if (t == ")" || t == "]" || t == "}")
-        state.indented = state.context.indented;
-      return state.context = state.context.prev;
-    }
-
-    // Interface
-
-    return {
-      startState: function(basecolumn) {
-        return {
-          tokenize: null,
-          context: new Context((basecolumn || 0) - indentUnit, 0, "top", false),
-          indented: 0,
-          startOfLine: true
-        };
-      },
-
-      token: function(stream, state) {
-        var ctx = state.context;
-        if (stream.sol()) {
-          if (ctx.align == null) ctx.align = false;
-          state.indented = stream.indentation();
-          state.startOfLine = true;
-        }
-        if (stream.eatSpace()) return null;
-        curPunc = null;
-        var style = (state.tokenize || tokenBase)(stream, state);
-        if (style == "comment" || style == "meta") return style;
-        if (ctx.align == null) ctx.align = true;
-
-        if ((curPunc == ";" || curPunc == ":") && ctx.type == "statement") popContext(state);
-        else if (curPunc == "{") pushContext(state, stream.column(), "}");
-        else if (curPunc == "[") pushContext(state, stream.column(), "]");
-        else if (curPunc == "(") pushContext(state, stream.column(), ")");
-        else if (curPunc == "}") {
-          while (ctx.type == "statement") ctx = popContext(state);
-          if (ctx.type == "}") ctx = popContext(state);
-          while (ctx.type == "statement") ctx = popContext(state);
-        }
-        else if (curPunc == ctx.type) popContext(state);
-        else if (ctx.type == "}" || ctx.type == "top" || (ctx.type == "statement" && curPunc == "newstatement"))
-          pushContext(state, stream.column(), "statement");
-        state.startOfLine = false;
-        return style;
-      },
-
-      indent: function(state, textAfter) {
-        if (state.tokenize != tokenBase && state.tokenize != null) return 0;
-        var firstChar = textAfter && textAfter.charAt(0), ctx = state.context, closing = firstChar == ctx.type;
-        if (ctx.type == "statement") return ctx.indented + (firstChar == "{" ? 0 : indentUnit);
-        else if (ctx.align) return ctx.column + (closing ? 0 : 1);
-        else return ctx.indented + (closing ? 0 : indentUnit);
-      },
-
-      electricChars: "{}"
-    };
-  });
-
-  function words(str) {
-    var obj = {}, words = str.split(" ");
-    for (var i = 0; i < words.length; ++i) obj[words[i]] = true;
-    return obj;
-  }
-  var glslKeywords = "attribute const uniform varying break continue " +
-    "do for while if else in out inout float int void bool true false " +
-    "lowp mediump highp precision invariant discard return mat2 mat3 " +
-    "mat4 vec2 vec3 vec4 ivec2 ivec3 ivec4 bvec2 bvec3 bvec4 sampler2D " +
-    "samplerCube struct gl_FragCoord gl_FragColor";
-  var glslBuiltins = "radians degrees sin cos tan asin acos atan pow " +
-    "exp log exp2 log2 sqrt inversesqrt abs sign floor ceil fract mod " +
-    "min max clamp mix step smoothstep length distance dot cross " +
-    "normalize faceforward reflect refract matrixCompMult lessThan " +
-    "lessThanEqual greaterThan greaterThanEqual equal notEqual any all " +
-    "not dFdx dFdy fwidth texture2D texture2DProj texture2DLod " +
-    "texture2DProjLod textureCube textureCubeLod require export";
-
-  function cppHook(stream, state) {
-    if (!state.startOfLine) return false;
-    stream.skipToEnd();
-    return "meta";
-  }
-
-  ;(function() {
-    // C#-style strings where "" escapes a quote.
-    function tokenAtString(stream, state) {
-      var next;
-      while ((next = stream.next()) != null) {
-        if (next == '"' && !stream.eat('"')) {
-          state.tokenize = null;
-          break;
-        }
-      }
-      return "string";
-    }
-
-    CodeMirror.defineMIME("text/x-glsl", {
-      name: "glsl",
-      keywords: words(glslKeywords),
-      builtins: words(glslBuiltins),
-      blockKeywords: words("case do else for if switch while struct"),
-      atoms: words("null"),
-      hooks: {"#": cppHook}
-    });
-  }());
-}
-
-},{}],4:[function(require,module,exports){
-var size       = require('element-size')
-var CodeMirror = require('codemirror')
-var inherits   = require('inherits')
-var Emitter    = require('events/')
-var xtend      = require('xtend')
-
-require('./glsl')(CodeMirror)
-
-module.exports = Editor
-
-var defaults = {
-    container: document.body
-  , mode: 'glsl'
-  , lineNumbers: true
-  , matchBrackets: true
-  , indentWithTabs: false
-  , tabSize: 2
-  , indentUnit: 2
-  , theme: 'paraiso-dark'
-  , styleActiveLine: true
-  , showCursorWhenSelecting: true
-  , viewportMargin: Infinity
-  , value: [
-      'precision mediump float;\n'
-    , 'void main() {'
-    , '  gl_FragColor = vec4(1.0);'
-    , '}'
-  ].join('\n')
-}
-
-inherits(Editor, Emitter)
-function Editor(opts) {
-  if (!(this instanceof Editor)) return new Editor(opts)
-  Emitter.call(this)
-
-  var wrap = this.wrap = document.createElement('div')
-  var self = this
-  opts = opts || {}
-  opts = xtend({}, defaults, opts)
-
-  this.editor = new CodeMirror(wrap, opts)
-  this.editor.on('change', function() {
-    self.emit('change', self.getValue())
-  })
-
-  this.element = this.editor.getWrapperElement()
-  this.resized = false
-  this.errorLines = []
-
-  opts.container.appendChild(wrap)
-
-  setTimeout(function() {
-    self.editor.focus()
-    if (self.resized) return
-    self.resize()
-  }, 1)
-}
-
-Editor.prototype.resize = function(w, h) {
-  this.resized = true
-
-  if (w && h) return this.editor.setSize(w, h)
-  var sz = size(this.wrap)
-
-  this.editor.setSize(w || sz[0], h || sz[1])
-}
-
-Editor.prototype.getValue = function() {
-  return this.editor.getValue()
-}
-
-Editor.prototype.setValue = function(str) {
-  return this.editor.setValue(str)
-}
-
-},{"./glsl":3,"codemirror":5,"element-size":6,"events/":7,"inherits":8,"xtend":10}],5:[function(require,module,exports){
+(function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
 // CodeMirror, copyright (c) by Marijn Haverbeke and others
 // Distributed under an MIT license: http://codemirror.net/LICENSE
 
@@ -8613,7 +8068,7 @@ Editor.prototype.setValue = function(str) {
   return CodeMirror;
 });
 
-},{}],6:[function(require,module,exports){
+},{}],2:[function(require,module,exports){
 module.exports = getSize
 
 function getSize(element) {
@@ -8649,7 +8104,7 @@ function parse(prop) {
   return parseFloat(prop) || 0
 }
 
-},{}],7:[function(require,module,exports){
+},{}],3:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -8709,8 +8164,12 @@ EventEmitter.prototype.emit = function(type) {
       er = arguments[1];
       if (er instanceof Error) {
         throw er; // Unhandled 'error' event
+      } else {
+        // At least give some kind of context to the user
+        var err = new Error('Uncaught, unspecified "error" event. (' + er + ')');
+        err.context = er;
+        throw err;
       }
-      throw TypeError('Uncaught, unspecified "error" event.');
     }
   }
 
@@ -8949,32 +8408,601 @@ function isUndefined(arg) {
   return arg === void 0;
 }
 
-},{}],8:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
+/* FileSaver.js
+ * A saveAs() FileSaver implementation.
+ * 1.1.20150716
+ *
+ * By Eli Grey, http://eligrey.com
+ * License: X11/MIT
+ *   See https://github.com/eligrey/FileSaver.js/blob/master/LICENSE.md
+ */
+
+/*global self */
+/*jslint bitwise: true, indent: 4, laxbreak: true, laxcomma: true, smarttabs: true, plusplus: true */
+
+/*! @source http://purl.eligrey.com/github/FileSaver.js/blob/master/FileSaver.js */
+
+var saveAs = saveAs || (function(view) {
+	"use strict";
+	// IE <10 is explicitly unsupported
+	if (typeof navigator !== "undefined" && /MSIE [1-9]\./.test(navigator.userAgent)) {
+		return;
+	}
+	var
+		  doc = view.document
+		  // only get URL when necessary in case Blob.js hasn't overridden it yet
+		, get_URL = function() {
+			return view.URL || view.webkitURL || view;
+		}
+		, save_link = doc.createElementNS("http://www.w3.org/1999/xhtml", "a")
+		, can_use_save_link = "download" in save_link
+		, click = function(node) {
+			var event = new MouseEvent("click");
+			node.dispatchEvent(event);
+		}
+		, webkit_req_fs = view.webkitRequestFileSystem
+		, req_fs = view.requestFileSystem || webkit_req_fs || view.mozRequestFileSystem
+		, throw_outside = function(ex) {
+			(view.setImmediate || view.setTimeout)(function() {
+				throw ex;
+			}, 0);
+		}
+		, force_saveable_type = "application/octet-stream"
+		, fs_min_size = 0
+		// See https://code.google.com/p/chromium/issues/detail?id=375297#c7 and
+		// https://github.com/eligrey/FileSaver.js/commit/485930a#commitcomment-8768047
+		// for the reasoning behind the timeout and revocation flow
+		, arbitrary_revoke_timeout = 500 // in ms
+		, revoke = function(file) {
+			var revoker = function() {
+				if (typeof file === "string") { // file is an object URL
+					get_URL().revokeObjectURL(file);
+				} else { // file is a File
+					file.remove();
+				}
+			};
+			if (view.chrome) {
+				revoker();
+			} else {
+				setTimeout(revoker, arbitrary_revoke_timeout);
+			}
+		}
+		, dispatch = function(filesaver, event_types, event) {
+			event_types = [].concat(event_types);
+			var i = event_types.length;
+			while (i--) {
+				var listener = filesaver["on" + event_types[i]];
+				if (typeof listener === "function") {
+					try {
+						listener.call(filesaver, event || filesaver);
+					} catch (ex) {
+						throw_outside(ex);
+					}
+				}
+			}
+		}
+		, auto_bom = function(blob) {
+			// prepend BOM for UTF-8 XML and text/* types (including HTML)
+			if (/^\s*(?:text\/\S*|application\/xml|\S*\/\S*\+xml)\s*;.*charset\s*=\s*utf-8/i.test(blob.type)) {
+				return new Blob(["\ufeff", blob], {type: blob.type});
+			}
+			return blob;
+		}
+		, FileSaver = function(blob, name, no_auto_bom) {
+			if (!no_auto_bom) {
+				blob = auto_bom(blob);
+			}
+			// First try a.download, then web filesystem, then object URLs
+			var
+				  filesaver = this
+				, type = blob.type
+				, blob_changed = false
+				, object_url
+				, target_view
+				, dispatch_all = function() {
+					dispatch(filesaver, "writestart progress write writeend".split(" "));
+				}
+				// on any filesys errors revert to saving with object URLs
+				, fs_error = function() {
+					// don't create more object URLs than needed
+					if (blob_changed || !object_url) {
+						object_url = get_URL().createObjectURL(blob);
+					}
+					if (target_view) {
+						target_view.location.href = object_url;
+					} else {
+						var new_tab = view.open(object_url, "_blank");
+						if (new_tab == undefined && typeof safari !== "undefined") {
+							//Apple do not allow window.open, see http://bit.ly/1kZffRI
+							view.location.href = object_url
+						}
+					}
+					filesaver.readyState = filesaver.DONE;
+					dispatch_all();
+					revoke(object_url);
+				}
+				, abortable = function(func) {
+					return function() {
+						if (filesaver.readyState !== filesaver.DONE) {
+							return func.apply(this, arguments);
+						}
+					};
+				}
+				, create_if_not_found = {create: true, exclusive: false}
+				, slice
+			;
+			filesaver.readyState = filesaver.INIT;
+			if (!name) {
+				name = "download";
+			}
+			if (can_use_save_link) {
+				object_url = get_URL().createObjectURL(blob);
+				save_link.href = object_url;
+				save_link.download = name;
+				setTimeout(function() {
+					click(save_link);
+					dispatch_all();
+					revoke(object_url);
+					filesaver.readyState = filesaver.DONE;
+				});
+				return;
+			}
+			// Object and web filesystem URLs have a problem saving in Google Chrome when
+			// viewed in a tab, so I force save with application/octet-stream
+			// http://code.google.com/p/chromium/issues/detail?id=91158
+			// Update: Google errantly closed 91158, I submitted it again:
+			// https://code.google.com/p/chromium/issues/detail?id=389642
+			if (view.chrome && type && type !== force_saveable_type) {
+				slice = blob.slice || blob.webkitSlice;
+				blob = slice.call(blob, 0, blob.size, force_saveable_type);
+				blob_changed = true;
+			}
+			// Since I can't be sure that the guessed media type will trigger a download
+			// in WebKit, I append .download to the filename.
+			// https://bugs.webkit.org/show_bug.cgi?id=65440
+			if (webkit_req_fs && name !== "download") {
+				name += ".download";
+			}
+			if (type === force_saveable_type || webkit_req_fs) {
+				target_view = view;
+			}
+			if (!req_fs) {
+				fs_error();
+				return;
+			}
+			fs_min_size += blob.size;
+			req_fs(view.TEMPORARY, fs_min_size, abortable(function(fs) {
+				fs.root.getDirectory("saved", create_if_not_found, abortable(function(dir) {
+					var save = function() {
+						dir.getFile(name, create_if_not_found, abortable(function(file) {
+							file.createWriter(abortable(function(writer) {
+								writer.onwriteend = function(event) {
+									target_view.location.href = file.toURL();
+									filesaver.readyState = filesaver.DONE;
+									dispatch(filesaver, "writeend", event);
+									revoke(file);
+								};
+								writer.onerror = function() {
+									var error = writer.error;
+									if (error.code !== error.ABORT_ERR) {
+										fs_error();
+									}
+								};
+								"writestart progress write abort".split(" ").forEach(function(event) {
+									writer["on" + event] = filesaver["on" + event];
+								});
+								writer.write(blob);
+								filesaver.abort = function() {
+									writer.abort();
+									filesaver.readyState = filesaver.DONE;
+								};
+								filesaver.readyState = filesaver.WRITING;
+							}), fs_error);
+						}), fs_error);
+					};
+					dir.getFile(name, {create: false}, abortable(function(file) {
+						// delete file if it already exists
+						file.remove();
+						save();
+					}), abortable(function(ex) {
+						if (ex.code === ex.NOT_FOUND_ERR) {
+							save();
+						} else {
+							fs_error();
+						}
+					}));
+				}), fs_error);
+			}), fs_error);
+		}
+		, FS_proto = FileSaver.prototype
+		, saveAs = function(blob, name, no_auto_bom) {
+			return new FileSaver(blob, name, no_auto_bom);
+		}
+	;
+	// IE 10+ (native saveAs)
+	if (typeof navigator !== "undefined" && navigator.msSaveOrOpenBlob) {
+		return function(blob, name, no_auto_bom) {
+			if (!no_auto_bom) {
+				blob = auto_bom(blob);
+			}
+			return navigator.msSaveOrOpenBlob(blob, name || "download");
+		};
+	}
+
+	FS_proto.abort = function() {
+		var filesaver = this;
+		filesaver.readyState = filesaver.DONE;
+		dispatch(filesaver, "abort");
+	};
+	FS_proto.readyState = FS_proto.INIT = 0;
+	FS_proto.WRITING = 1;
+	FS_proto.DONE = 2;
+
+	FS_proto.error =
+	FS_proto.onwritestart =
+	FS_proto.onprogress =
+	FS_proto.onwrite =
+	FS_proto.onabort =
+	FS_proto.onerror =
+	FS_proto.onwriteend =
+		null;
+
+	return saveAs;
+}(
+	   typeof self !== "undefined" && self
+	|| typeof window !== "undefined" && window
+	|| this.content
+));
+// `self` is undefined in Firefox for Android content script context
+// while `this` is nsIContentFrameMessageManager
+// with an attribute `content` that corresponds to the window
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports.saveAs = saveAs;
+} else if ((typeof define !== "undefined" && define !== null) && (define.amd != null)) {
+  define([], function() {
+    return saveAs;
+  });
+}
+
+},{}],5:[function(require,module,exports){
+module.exports = require("insert-css")("/* BASICS */\n\n.CodeMirror {\n  /* Set height, width, borders, and global font properties here */\n  font-family: monospace;\n  height: 300px;\n}\n\n/* PADDING */\n\n.CodeMirror-lines {\n  padding: 4px 0; /* Vertical padding around content */\n}\n.CodeMirror pre {\n  padding: 0 4px; /* Horizontal padding of content */\n}\n\n.CodeMirror-scrollbar-filler, .CodeMirror-gutter-filler {\n  background-color: white; /* The little square between H and V scrollbars */\n}\n\n/* GUTTER */\n\n.CodeMirror-gutters {\n  border-right: 1px solid #ddd;\n  background-color: #f7f7f7;\n  white-space: nowrap;\n}\n.CodeMirror-linenumbers {}\n.CodeMirror-linenumber {\n  padding: 0 3px 0 5px;\n  min-width: 20px;\n  text-align: right;\n  color: #999;\n  -moz-box-sizing: content-box;\n  box-sizing: content-box;\n}\n\n.CodeMirror-guttermarker { color: black; }\n.CodeMirror-guttermarker-subtle { color: #999; }\n\n/* CURSOR */\n\n.CodeMirror div.CodeMirror-cursor {\n  border-left: 1px solid black;\n}\n/* Shown when moving in bi-directional text */\n.CodeMirror div.CodeMirror-secondarycursor {\n  border-left: 1px solid silver;\n}\n.CodeMirror.cm-fat-cursor div.CodeMirror-cursor {\n  width: auto;\n  border: 0;\n  background: #7e7;\n}\n.CodeMirror.cm-fat-cursor div.CodeMirror-cursors {\n  z-index: 1;\n}\n\n.cm-animate-fat-cursor {\n  width: auto;\n  border: 0;\n  -webkit-animation: blink 1.06s steps(1) infinite;\n  -moz-animation: blink 1.06s steps(1) infinite;\n  animation: blink 1.06s steps(1) infinite;\n}\n@-moz-keyframes blink {\n  0% { background: #7e7; }\n  50% { background: none; }\n  100% { background: #7e7; }\n}\n@-webkit-keyframes blink {\n  0% { background: #7e7; }\n  50% { background: none; }\n  100% { background: #7e7; }\n}\n@keyframes blink {\n  0% { background: #7e7; }\n  50% { background: none; }\n  100% { background: #7e7; }\n}\n\n/* Can style cursor different in overwrite (non-insert) mode */\ndiv.CodeMirror-overwrite div.CodeMirror-cursor {}\n\n.cm-tab { display: inline-block; text-decoration: inherit; }\n\n.CodeMirror-ruler {\n  border-left: 1px solid #ccc;\n  position: absolute;\n}\n\n/* DEFAULT THEME */\n\n.cm-s-default .cm-keyword {color: #708;}\n.cm-s-default .cm-atom {color: #219;}\n.cm-s-default .cm-number {color: #164;}\n.cm-s-default .cm-def {color: #00f;}\n.cm-s-default .cm-variable,\n.cm-s-default .cm-punctuation,\n.cm-s-default .cm-property,\n.cm-s-default .cm-operator {}\n.cm-s-default .cm-variable-2 {color: #05a;}\n.cm-s-default .cm-variable-3 {color: #085;}\n.cm-s-default .cm-comment {color: #a50;}\n.cm-s-default .cm-string {color: #a11;}\n.cm-s-default .cm-string-2 {color: #f50;}\n.cm-s-default .cm-meta {color: #555;}\n.cm-s-default .cm-qualifier {color: #555;}\n.cm-s-default .cm-builtin {color: #30a;}\n.cm-s-default .cm-bracket {color: #997;}\n.cm-s-default .cm-tag {color: #170;}\n.cm-s-default .cm-attribute {color: #00c;}\n.cm-s-default .cm-header {color: blue;}\n.cm-s-default .cm-quote {color: #090;}\n.cm-s-default .cm-hr {color: #999;}\n.cm-s-default .cm-link {color: #00c;}\n\n.cm-negative {color: #d44;}\n.cm-positive {color: #292;}\n.cm-header, .cm-strong {font-weight: bold;}\n.cm-em {font-style: italic;}\n.cm-link {text-decoration: underline;}\n.cm-strikethrough {text-decoration: line-through;}\n\n.cm-s-default .cm-error {color: #f00;}\n.cm-invalidchar {color: #f00;}\n\n/* Default styles for common addons */\n\ndiv.CodeMirror span.CodeMirror-matchingbracket {color: #0f0;}\ndiv.CodeMirror span.CodeMirror-nonmatchingbracket {color: #f22;}\n.CodeMirror-matchingtag { background: rgba(255, 150, 0, .3); }\n.CodeMirror-activeline-background {background: #e8f2ff;}\n\n/* STOP */\n\n/* The rest of this file contains styles related to the mechanics of\n   the editor. You probably shouldn't touch them. */\n\n.CodeMirror {\n  line-height: 1;\n  position: relative;\n  overflow: hidden;\n  background: white;\n  color: black;\n}\n\n.CodeMirror-scroll {\n  overflow: scroll !important; /* Things will break if this is overridden */\n  /* 30px is the magic margin used to hide the element's real scrollbars */\n  /* See overflow: hidden in .CodeMirror */\n  margin-bottom: -30px; margin-right: -30px;\n  padding-bottom: 30px;\n  height: 100%;\n  outline: none; /* Prevent dragging from highlighting the element */\n  position: relative;\n  -moz-box-sizing: content-box;\n  box-sizing: content-box;\n}\n.CodeMirror-sizer {\n  position: relative;\n  border-right: 30px solid transparent;\n  -moz-box-sizing: content-box;\n  box-sizing: content-box;\n}\n\n/* The fake, visible scrollbars. Used to force redraw during scrolling\n   before actuall scrolling happens, thus preventing shaking and\n   flickering artifacts. */\n.CodeMirror-vscrollbar, .CodeMirror-hscrollbar, .CodeMirror-scrollbar-filler, .CodeMirror-gutter-filler {\n  position: absolute;\n  z-index: 6;\n  display: none;\n}\n.CodeMirror-vscrollbar {\n  right: 0; top: 0;\n  overflow-x: hidden;\n  overflow-y: scroll;\n}\n.CodeMirror-hscrollbar {\n  bottom: 0; left: 0;\n  overflow-y: hidden;\n  overflow-x: scroll;\n}\n.CodeMirror-scrollbar-filler {\n  right: 0; bottom: 0;\n}\n.CodeMirror-gutter-filler {\n  left: 0; bottom: 0;\n}\n\n.CodeMirror-gutters {\n  position: absolute; left: 0; top: 0;\n  z-index: 3;\n}\n.CodeMirror-gutter {\n  white-space: normal;\n  height: 100%;\n  -moz-box-sizing: content-box;\n  box-sizing: content-box;\n  display: inline-block;\n  margin-bottom: -30px;\n  /* Hack to make IE7 behave */\n  *zoom:1;\n  *display:inline;\n}\n.CodeMirror-gutter-wrapper {\n  position: absolute;\n  z-index: 4;\n  height: 100%;\n}\n.CodeMirror-gutter-elt {\n  position: absolute;\n  cursor: default;\n  z-index: 4;\n}\n\n.CodeMirror-lines {\n  cursor: text;\n  min-height: 1px; /* prevents collapsing before first draw */\n}\n.CodeMirror pre {\n  /* Reset some styles that the rest of the page might have set */\n  -moz-border-radius: 0; -webkit-border-radius: 0; border-radius: 0;\n  border-width: 0;\n  background: transparent;\n  font-family: inherit;\n  font-size: inherit;\n  margin: 0;\n  white-space: pre;\n  word-wrap: normal;\n  line-height: inherit;\n  color: inherit;\n  z-index: 2;\n  position: relative;\n  overflow: visible;\n}\n.CodeMirror-wrap pre {\n  word-wrap: break-word;\n  white-space: pre-wrap;\n  word-break: normal;\n}\n\n.CodeMirror-linebackground {\n  position: absolute;\n  left: 0; right: 0; top: 0; bottom: 0;\n  z-index: 0;\n}\n\n.CodeMirror-linewidget {\n  position: relative;\n  z-index: 2;\n  overflow: auto;\n}\n\n.CodeMirror-widget {}\n\n.CodeMirror-measure {\n  position: absolute;\n  width: 100%;\n  height: 0;\n  overflow: hidden;\n  visibility: hidden;\n}\n.CodeMirror-measure pre { position: static; }\n\n.CodeMirror div.CodeMirror-cursor {\n  position: absolute;\n  border-right: none;\n  width: 0;\n}\n\ndiv.CodeMirror-cursors {\n  visibility: hidden;\n  position: relative;\n  z-index: 3;\n}\n.CodeMirror-focused div.CodeMirror-cursors {\n  visibility: visible;\n}\n\n.CodeMirror-selected { background: #d9d9d9; }\n.CodeMirror-focused .CodeMirror-selected { background: #d7d4f0; }\n.CodeMirror-crosshair { cursor: crosshair; }\n\n.cm-searching {\n  background: #ffa;\n  background: rgba(255, 255, 0, .4);\n}\n\n/* IE7 hack to prevent it from returning funny offsetTops on the spans */\n.CodeMirror span { *vertical-align: text-bottom; }\n\n/* Used to force a border model for a node */\n.cm-force-border { padding-right: .1px; }\n\n@media print {\n  /* Hide the cursor when printing */\n  .CodeMirror div.CodeMirror-cursors {\n    visibility: hidden;\n  }\n}\n\n/* See issue #2901 */\n.cm-tab-wrap-hack:after { content: ''; }\n\n/* Help users use markselection to safely style text background */\nspan.CodeMirror-selectedtext { background: none; }\n")
+},{"insert-css":11}],6:[function(require,module,exports){
+module.exports = function(CodeMirror) {
+  CodeMirror.defineMode("glsl", function(config, parserConfig) {
+    var indentUnit = config.indentUnit,
+        keywords = parserConfig.keywords || words(glslKeywords),
+        builtins = parserConfig.builtins || words(glslBuiltins),
+        blockKeywords = parserConfig.blockKeywords || words("case do else for if switch while struct"),
+        atoms = parserConfig.atoms || words("null"),
+        hooks = parserConfig.hooks || {},
+        multiLineStrings = parserConfig.multiLineStrings;
+    var isOperatorChar = /[+\-*&%=<>!?|\/]/;
+
+    var curPunc;
+
+    function tokenBase(stream, state) {
+      var ch = stream.next();
+      if (hooks[ch]) {
+        var result = hooks[ch](stream, state);
+        if (result !== false) return result;
+      }
+      if (ch == '"' || ch == "'") {
+        state.tokenize = tokenString(ch);
+        return state.tokenize(stream, state);
+      }
+      if (/[\[\]{}\(\),;\:\.]/.test(ch)) {
+        curPunc = ch;
+        return "bracket";
+      }
+      if (/\d/.test(ch)) {
+        stream.eatWhile(/[\w\.]/);
+        return "number";
+      }
+      if (ch == "/") {
+        if (stream.eat("*")) {
+          state.tokenize = tokenComment;
+          return tokenComment(stream, state);
+        }
+        if (stream.eat("/")) {
+          stream.skipToEnd();
+          return "comment";
+        }
+      }
+      if (ch == "#") {
+        stream.eatWhile(/[\S]+/);
+        stream.eatWhile(/[\s]+/);
+        stream.eatWhile(/[\S]+/);
+        stream.eatWhile(/[\s]+/);
+        return "comment";
+      }
+      if (isOperatorChar.test(ch)) {
+        stream.eatWhile(isOperatorChar);
+        return "operator";
+      }
+      stream.eatWhile(/[\w\$_]/);
+      var cur = stream.current();
+      if (keywords.propertyIsEnumerable(cur)) {
+        if (blockKeywords.propertyIsEnumerable(cur)) curPunc = "newstatement";
+        return "keyword";
+      }
+      if (builtins.propertyIsEnumerable(cur)) {
+        return "builtin";
+      }
+      if (atoms.propertyIsEnumerable(cur)) return "atom";
+      return "word";
+    }
+
+    function tokenString(quote) {
+      return function(stream, state) {
+        var escaped = false, next, end = false;
+        while ((next = stream.next()) != null) {
+          if (next == quote && !escaped) {end = true; break;}
+          escaped = !escaped && next == "\\";
+        }
+        if (end || !(escaped || multiLineStrings))
+          state.tokenize = tokenBase;
+        return "string";
+      };
+    }
+
+    function tokenComment(stream, state) {
+      var maybeEnd = false, ch;
+      while (ch = stream.next()) {
+        if (ch == "/" && maybeEnd) {
+          state.tokenize = tokenBase;
+          break;
+        }
+        maybeEnd = (ch == "*");
+      }
+      return "comment";
+    }
+
+    function Context(indented, column, type, align, prev) {
+      this.indented = indented;
+      this.column = column;
+      this.type = type;
+      this.align = align;
+      this.prev = prev;
+    }
+    function pushContext(state, col, type) {
+      return state.context = new Context(state.indented, col, type, null, state.context);
+    }
+    function popContext(state) {
+      var t = state.context.type;
+      if (t == ")" || t == "]" || t == "}")
+        state.indented = state.context.indented;
+      return state.context = state.context.prev;
+    }
+
+    // Interface
+
+    return {
+      startState: function(basecolumn) {
+        return {
+          tokenize: null,
+          context: new Context((basecolumn || 0) - indentUnit, 0, "top", false),
+          indented: 0,
+          startOfLine: true
+        };
+      },
+
+      token: function(stream, state) {
+        var ctx = state.context;
+        if (stream.sol()) {
+          if (ctx.align == null) ctx.align = false;
+          state.indented = stream.indentation();
+          state.startOfLine = true;
+        }
+        if (stream.eatSpace()) return null;
+        curPunc = null;
+        var style = (state.tokenize || tokenBase)(stream, state);
+        if (style == "comment" || style == "meta") return style;
+        if (ctx.align == null) ctx.align = true;
+
+        if ((curPunc == ";" || curPunc == ":") && ctx.type == "statement") popContext(state);
+        else if (curPunc == "{") pushContext(state, stream.column(), "}");
+        else if (curPunc == "[") pushContext(state, stream.column(), "]");
+        else if (curPunc == "(") pushContext(state, stream.column(), ")");
+        else if (curPunc == "}") {
+          while (ctx.type == "statement") ctx = popContext(state);
+          if (ctx.type == "}") ctx = popContext(state);
+          while (ctx.type == "statement") ctx = popContext(state);
+        }
+        else if (curPunc == ctx.type) popContext(state);
+        else if (ctx.type == "}" || ctx.type == "top" || (ctx.type == "statement" && curPunc == "newstatement"))
+          pushContext(state, stream.column(), "statement");
+        state.startOfLine = false;
+        return style;
+      },
+
+      indent: function(state, textAfter) {
+        if (state.tokenize != tokenBase && state.tokenize != null) return 0;
+        var firstChar = textAfter && textAfter.charAt(0), ctx = state.context, closing = firstChar == ctx.type;
+        if (ctx.type == "statement") return ctx.indented + (firstChar == "{" ? 0 : indentUnit);
+        else if (ctx.align) return ctx.column + (closing ? 0 : 1);
+        else return ctx.indented + (closing ? 0 : indentUnit);
+      },
+
+      electricChars: "{}"
+    };
+  });
+
+  function words(str) {
+    var obj = {}, words = str.split(" ");
+    for (var i = 0; i < words.length; ++i) obj[words[i]] = true;
+    return obj;
+  }
+  var glslKeywords = "attribute const uniform varying break continue " +
+    "do for while if else in out inout float int void bool true false " +
+    "lowp mediump highp precision invariant discard return mat2 mat3 " +
+    "mat4 vec2 vec3 vec4 ivec2 ivec3 ivec4 bvec2 bvec3 bvec4 sampler2D " +
+    "samplerCube struct gl_FragCoord gl_FragColor";
+  var glslBuiltins = "radians degrees sin cos tan asin acos atan pow " +
+    "exp log exp2 log2 sqrt inversesqrt abs sign floor ceil fract mod " +
+    "min max clamp mix step smoothstep length distance dot cross " +
+    "normalize faceforward reflect refract matrixCompMult lessThan " +
+    "lessThanEqual greaterThan greaterThanEqual equal notEqual any all " +
+    "not dFdx dFdy fwidth texture2D texture2DProj texture2DLod " +
+    "texture2DProjLod textureCube textureCubeLod require export";
+
+  function cppHook(stream, state) {
+    if (!state.startOfLine) return false;
+    stream.skipToEnd();
+    return "meta";
+  }
+
+  ;(function() {
+    // C#-style strings where "" escapes a quote.
+    function tokenAtString(stream, state) {
+      var next;
+      while ((next = stream.next()) != null) {
+        if (next == '"' && !stream.eat('"')) {
+          state.tokenize = null;
+          break;
+        }
+      }
+      return "string";
+    }
+
+    CodeMirror.defineMIME("text/x-glsl", {
+      name: "glsl",
+      keywords: words(glslKeywords),
+      builtins: words(glslBuiltins),
+      blockKeywords: words("case do else for if switch while struct"),
+      atoms: words("null"),
+      hooks: {"#": cppHook}
+    });
+  }());
+}
+
+},{}],7:[function(require,module,exports){
+var size       = require('element-size')
+var CodeMirror = require('codemirror')
+var inherits   = require('inherits')
+var Emitter    = require('events/')
+var xtend      = require('xtend')
+
+require('./glsl')(CodeMirror)
+
+module.exports = Editor
+
+var defaults = {
+    container: document.body
+  , mode: 'glsl'
+  , lineNumbers: true
+  , matchBrackets: true
+  , indentWithTabs: false
+  , tabSize: 2
+  , indentUnit: 2
+  , theme: 'paraiso-dark'
+  , styleActiveLine: true
+  , showCursorWhenSelecting: true
+  , viewportMargin: Infinity
+  , value: [
+      'precision mediump float;\n'
+    , 'void main() {'
+    , '  gl_FragColor = vec4(1.0);'
+    , '}'
+  ].join('\n')
+}
+
+inherits(Editor, Emitter)
+function Editor(opts) {
+  if (!(this instanceof Editor)) return new Editor(opts)
+  Emitter.call(this)
+
+  var wrap = this.wrap = document.createElement('div')
+  var self = this
+  opts = opts || {}
+  opts = xtend({}, defaults, opts)
+
+  this.editor = new CodeMirror(wrap, opts)
+  this.editor.on('change', function() {
+    self.emit('change', self.getValue())
+  })
+
+  this.element = this.editor.getWrapperElement()
+  this.resized = false
+  this.errorLines = []
+
+  opts.container.appendChild(wrap)
+
+  setTimeout(function() {
+    self.editor.focus()
+    if (self.resized) return
+    self.resize()
+  }, 1)
+}
+
+Editor.prototype.resize = function(w, h) {
+  this.resized = true
+
+  if (w && h) return this.editor.setSize(w, h)
+  var sz = size(this.wrap)
+
+  this.editor.setSize(w || sz[0], h || sz[1])
+}
+
+Editor.prototype.getValue = function() {
+  return this.editor.getValue()
+}
+
+Editor.prototype.setValue = function(str) {
+  return this.editor.setValue(str)
+}
+
+},{"./glsl":6,"codemirror":1,"element-size":2,"events/":3,"inherits":10,"xtend":17}],8:[function(require,module,exports){
+var css = require('insert-css')
+
+
+module.exports = css("/*\n\n    Name:       Paraíso (Dark)\n    Author:     Jan T. Sott\n\n    Color scheme by Jan T. Sott (https://github.com/idleberg/Paraiso-CodeMirror)\n    Inspired by the art of Rubens LP (http://www.rubenslp.com.br)\n\n*/\n\n.cm-s-paraiso-dark.CodeMirror {background: #2f1e2e; color: #b9b6b0; line-height: 1.60em; font-size: 14px;}\n.cm-s-paraiso-dark div.CodeMirror-selected {background: #41323f !important;}\n.cm-s-paraiso-dark .CodeMirror-gutters {background: #2f1e2e; border-right: 0px;}\n.cm-s-paraiso-dark .CodeMirror-guttermarker { color: #ef6155; }\n.cm-s-paraiso-dark .CodeMirror-guttermarker-subtle { color: #776e71; }\n.cm-s-paraiso-dark .CodeMirror-linenumber {color: #776e71;}\n.cm-s-paraiso-dark .CodeMirror-cursor {border-left: 1px solid #8d8687 !important;}\n\n.cm-s-paraiso-dark span.cm-comment {color: #e96ba8;}\n.cm-s-paraiso-dark span.cm-atom {color: #815ba4;}\n.cm-s-paraiso-dark span.cm-number {color: #815ba4;}\n\n.cm-s-paraiso-dark span.cm-property, .cm-s-paraiso-dark span.cm-attribute {color: #48b685;}\n.cm-s-paraiso-dark span.cm-keyword {color: #ef6155;}\n.cm-s-paraiso-dark span.cm-string {color: #fec418;}\n.cm-s-paraiso-dark span.cm-number {color: #fec418;}\n.cm-s-paraiso-dark span.cm-builtin {color: #48b685;}\n\n.cm-s-paraiso-dark span.cm-variable {color: #48b685;}\n.cm-s-paraiso-dark span.cm-variable-2 {color: #06b6ef;}\n.cm-s-paraiso-dark span.cm-def {color: #f99b15;}\n.cm-s-paraiso-dark span.cm-bracket {color: #b9b6b0;}\n.cm-s-paraiso-dark span.cm-tag {color: #ef6155;}\n.cm-s-paraiso-dark span.cm-link {color: #815ba4;}\n.cm-s-paraiso-dark span.cm-comment {color: #06b6ef;}\n.cm-s-paraiso-dark span.cm-error {background: #ef6155; color: #8d8687;}\n\n.cm-s-paraiso-dark .CodeMirror-activeline-background {background: #4D344A !important;}\n.cm-s-paraiso-dark .CodeMirror-matchingbracket { text-decoration: underline; color: white !important;}\n")
+
+},{"insert-css":11}],9:[function(require,module,exports){
+module.exports = decodeFloat
+
+var UINT8_VIEW = new Uint8Array(4)
+var FLOAT_VIEW = new Float32Array(UINT8_VIEW.buffer)
+
+function decodeFloat(x, y, z, w) {
+  UINT8_VIEW[0] = w
+  UINT8_VIEW[1] = z
+  UINT8_VIEW[2] = y
+  UINT8_VIEW[3] = x
+  return FLOAT_VIEW[0]
+}
+
+},{}],10:[function(require,module,exports){
 if (typeof Object.create === 'function') {
   // implementation from standard node.js 'util' module
   module.exports = function inherits(ctor, superCtor) {
-    ctor.super_ = superCtor
-    ctor.prototype = Object.create(superCtor.prototype, {
-      constructor: {
-        value: ctor,
-        enumerable: false,
-        writable: true,
-        configurable: true
-      }
-    });
+    if (superCtor) {
+      ctor.super_ = superCtor
+      ctor.prototype = Object.create(superCtor.prototype, {
+        constructor: {
+          value: ctor,
+          enumerable: false,
+          writable: true,
+          configurable: true
+        }
+      })
+    }
   };
 } else {
   // old school shim for old browsers
   module.exports = function inherits(ctor, superCtor) {
-    ctor.super_ = superCtor
-    var TempCtor = function () {}
-    TempCtor.prototype = superCtor.prototype
-    ctor.prototype = new TempCtor()
-    ctor.prototype.constructor = ctor
+    if (superCtor) {
+      ctor.super_ = superCtor
+      var TempCtor = function () {}
+      TempCtor.prototype = superCtor.prototype
+      ctor.prototype = new TempCtor()
+      ctor.prototype.constructor = ctor
+    }
   }
 }
 
-},{}],9:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 var inserted = {};
 
 module.exports = function (css, options) {
@@ -8998,119 +9026,15 @@ module.exports = function (css, options) {
     }
 };
 
-},{}],10:[function(require,module,exports){
-module.exports = extend
-
-var hasOwnProperty = Object.prototype.hasOwnProperty;
-
-function extend() {
-    var target = {}
-
-    for (var i = 0; i < arguments.length; i++) {
-        var source = arguments[i]
-
-        for (var key in source) {
-            if (hasOwnProperty.call(source, key)) {
-                target[key] = source[key]
-            }
-        }
-    }
-
-    return target
-}
-
-},{}],11:[function(require,module,exports){
-var css = require('insert-css')
-
-
-module.exports = css("/*\n\n    Name:       Paraíso (Dark)\n    Author:     Jan T. Sott\n\n    Color scheme by Jan T. Sott (https://github.com/idleberg/Paraiso-CodeMirror)\n    Inspired by the art of Rubens LP (http://www.rubenslp.com.br)\n\n*/\n\n.cm-s-paraiso-dark.CodeMirror {background: #2f1e2e; color: #b9b6b0; line-height: 1.60em; font-size: 14px;}\n.cm-s-paraiso-dark div.CodeMirror-selected {background: #41323f !important;}\n.cm-s-paraiso-dark .CodeMirror-gutters {background: #2f1e2e; border-right: 0px;}\n.cm-s-paraiso-dark .CodeMirror-guttermarker { color: #ef6155; }\n.cm-s-paraiso-dark .CodeMirror-guttermarker-subtle { color: #776e71; }\n.cm-s-paraiso-dark .CodeMirror-linenumber {color: #776e71;}\n.cm-s-paraiso-dark .CodeMirror-cursor {border-left: 1px solid #8d8687 !important;}\n\n.cm-s-paraiso-dark span.cm-comment {color: #e96ba8;}\n.cm-s-paraiso-dark span.cm-atom {color: #815ba4;}\n.cm-s-paraiso-dark span.cm-number {color: #815ba4;}\n\n.cm-s-paraiso-dark span.cm-property, .cm-s-paraiso-dark span.cm-attribute {color: #48b685;}\n.cm-s-paraiso-dark span.cm-keyword {color: #ef6155;}\n.cm-s-paraiso-dark span.cm-string {color: #fec418;}\n.cm-s-paraiso-dark span.cm-number {color: #fec418;}\n.cm-s-paraiso-dark span.cm-builtin {color: #48b685;}\n\n.cm-s-paraiso-dark span.cm-variable {color: #48b685;}\n.cm-s-paraiso-dark span.cm-variable-2 {color: #06b6ef;}\n.cm-s-paraiso-dark span.cm-def {color: #f99b15;}\n.cm-s-paraiso-dark span.cm-bracket {color: #b9b6b0;}\n.cm-s-paraiso-dark span.cm-tag {color: #ef6155;}\n.cm-s-paraiso-dark span.cm-link {color: #815ba4;}\n.cm-s-paraiso-dark span.cm-comment {color: #06b6ef;}\n.cm-s-paraiso-dark span.cm-error {background: #ef6155; color: #8d8687;}\n\n.cm-s-paraiso-dark .CodeMirror-activeline-background {background: #4D344A !important;}\n.cm-s-paraiso-dark .CodeMirror-matchingbracket { text-decoration: underline; color: white !important;}\n")
-
-},{"insert-css":9}],12:[function(require,module,exports){
-module.exports = decodeFloat
-
-var UINT8_VIEW = new Uint8Array(4)
-var FLOAT_VIEW = new Float32Array(UINT8_VIEW.buffer)
-
-function decodeFloat(x, y, z, w) {
-  UINT8_VIEW[0] = w
-  UINT8_VIEW[1] = z
-  UINT8_VIEW[2] = y
-  UINT8_VIEW[3] = x
-  return FLOAT_VIEW[0]
-}
-
-},{}],13:[function(require,module,exports){
-(function (global){
+},{}],12:[function(require,module,exports){
+(function (global){(function (){
 /**
- * lodash 3.0.1 (Custom Build) <https://lodash.com/>
+ * Lodash (Custom Build) <https://lodash.com/>
  * Build: `lodash modularize exports="npm" -o ./`
- * Copyright 2012-2016 The Dojo Foundation <http://dojofoundation.org/>
+ * Copyright JS Foundation and other contributors <https://js.foundation/>
+ * Released under MIT license <https://lodash.com/license>
  * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
- * Copyright 2009-2016 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
- * Available under MIT license <https://lodash.com/license>
- */
-
-/** Used to determine if values are of the language type `Object`. */
-var objectTypes = {
-  'function': true,
-  'object': true
-};
-
-/** Detect free variable `exports`. */
-var freeExports = (objectTypes[typeof exports] && exports && !exports.nodeType)
-  ? exports
-  : undefined;
-
-/** Detect free variable `module`. */
-var freeModule = (objectTypes[typeof module] && module && !module.nodeType)
-  ? module
-  : undefined;
-
-/** Detect free variable `global` from Node.js. */
-var freeGlobal = checkGlobal(freeExports && freeModule && typeof global == 'object' && global);
-
-/** Detect free variable `self`. */
-var freeSelf = checkGlobal(objectTypes[typeof self] && self);
-
-/** Detect free variable `window`. */
-var freeWindow = checkGlobal(objectTypes[typeof window] && window);
-
-/** Detect `this` as the global object. */
-var thisGlobal = checkGlobal(objectTypes[typeof this] && this);
-
-/**
- * Used as a reference to the global object.
- *
- * The `this` value is used if it's the global object to avoid Greasemonkey's
- * restricted `window` object, otherwise the `window` object is used.
- */
-var root = freeGlobal ||
-  ((freeWindow !== (thisGlobal && thisGlobal.window)) && freeWindow) ||
-    freeSelf || thisGlobal || Function('return this')();
-
-/**
- * Checks if `value` is a global object.
- *
- * @private
- * @param {*} value The value to check.
- * @returns {null|Object} Returns `value` if it's a global object, else `null`.
- */
-function checkGlobal(value) {
-  return (value && value.Object === Object) ? value : null;
-}
-
-module.exports = root;
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],14:[function(require,module,exports){
-(function (global){
-/**
- * lodash 4.1.0 (Custom Build) <https://lodash.com/>
- * Build: `lodash modularize exports="npm" -o ./`
- * Copyright 2012-2016 The Dojo Foundation <http://dojofoundation.org/>
- * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
- * Copyright 2009-2016 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
- * Available under MIT license <https://lodash.com/license>
+ * Copyright Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
  */
 
 /** Used as the size to enable large array optimizations. */
@@ -9119,671 +9043,9 @@ var LARGE_ARRAY_SIZE = 200;
 /** Used to stand-in for `undefined` hash values. */
 var HASH_UNDEFINED = '__lodash_hash_undefined__';
 
-/** `Object#toString` result references. */
-var funcTag = '[object Function]',
-    genTag = '[object GeneratorFunction]';
-
-/** Used to match `RegExp` [syntax characters](http://ecma-international.org/ecma-262/6.0/#sec-patterns). */
-var reRegExpChar = /[\\^$.*+?()[\]{}|]/g;
-
-/** Used to detect host constructors (Safari > 5). */
-var reIsHostCtor = /^\[object .+?Constructor\]$/;
-
-/** Used to determine if values are of the language type `Object`. */
-var objectTypes = {
-  'function': true,
-  'object': true
-};
-
-/** Detect free variable `exports`. */
-var freeExports = (objectTypes[typeof exports] && exports && !exports.nodeType)
-  ? exports
-  : undefined;
-
-/** Detect free variable `module`. */
-var freeModule = (objectTypes[typeof module] && module && !module.nodeType)
-  ? module
-  : undefined;
-
-/** Detect free variable `global` from Node.js. */
-var freeGlobal = checkGlobal(freeExports && freeModule && typeof global == 'object' && global);
-
-/** Detect free variable `self`. */
-var freeSelf = checkGlobal(objectTypes[typeof self] && self);
-
-/** Detect free variable `window`. */
-var freeWindow = checkGlobal(objectTypes[typeof window] && window);
-
-/** Detect `this` as the global object. */
-var thisGlobal = checkGlobal(objectTypes[typeof this] && this);
-
-/**
- * Used as a reference to the global object.
- *
- * The `this` value is used if it's the global object to avoid Greasemonkey's
- * restricted `window` object, otherwise the `window` object is used.
- */
-var root = freeGlobal ||
-  ((freeWindow !== (thisGlobal && thisGlobal.window)) && freeWindow) ||
-    freeSelf || thisGlobal || Function('return this')();
-
-/**
- * Checks if `value` is a global object.
- *
- * @private
- * @param {*} value The value to check.
- * @returns {null|Object} Returns `value` if it's a global object, else `null`.
- */
-function checkGlobal(value) {
-  return (value && value.Object === Object) ? value : null;
-}
-
-/**
- * Checks if `value` is a host object in IE < 9.
- *
- * @private
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a host object, else `false`.
- */
-function isHostObject(value) {
-  // Many host objects are `Object` objects that can coerce to strings
-  // despite having improperly defined `toString` methods.
-  var result = false;
-  if (value != null && typeof value.toString != 'function') {
-    try {
-      result = !!(value + '');
-    } catch (e) {}
-  }
-  return result;
-}
-
-/** Used for built-in method references. */
-var arrayProto = Array.prototype,
-    objectProto = Object.prototype;
-
-/** Used to resolve the decompiled source of functions. */
-var funcToString = Function.prototype.toString;
-
-/** Used to check objects for own properties. */
-var hasOwnProperty = objectProto.hasOwnProperty;
-
-/**
- * Used to resolve the [`toStringTag`](http://ecma-international.org/ecma-262/6.0/#sec-object.prototype.tostring)
- * of values.
- */
-var objectToString = objectProto.toString;
-
-/** Used to detect if a method is native. */
-var reIsNative = RegExp('^' +
-  funcToString.call(hasOwnProperty).replace(reRegExpChar, '\\$&')
-  .replace(/hasOwnProperty|(function).*?(?=\\\()| for .+?(?=\\\])/g, '$1.*?') + '$'
-);
-
-/** Built-in value references. */
-var splice = arrayProto.splice;
-
-/* Built-in method references that are verified to be native. */
-var Map = getNative(root, 'Map'),
-    nativeCreate = getNative(Object, 'create');
-
-/**
- * Creates an hash object.
- *
- * @private
- * @constructor
- * @returns {Object} Returns the new hash object.
- */
-function Hash() {}
-
-/**
- * Removes `key` and its value from the hash.
- *
- * @private
- * @param {Object} hash The hash to modify.
- * @param {string} key The key of the value to remove.
- * @returns {boolean} Returns `true` if the entry was removed, else `false`.
- */
-function hashDelete(hash, key) {
-  return hashHas(hash, key) && delete hash[key];
-}
-
-/**
- * Gets the hash value for `key`.
- *
- * @private
- * @param {Object} hash The hash to query.
- * @param {string} key The key of the value to get.
- * @returns {*} Returns the entry value.
- */
-function hashGet(hash, key) {
-  if (nativeCreate) {
-    var result = hash[key];
-    return result === HASH_UNDEFINED ? undefined : result;
-  }
-  return hasOwnProperty.call(hash, key) ? hash[key] : undefined;
-}
-
-/**
- * Checks if a hash value for `key` exists.
- *
- * @private
- * @param {Object} hash The hash to query.
- * @param {string} key The key of the entry to check.
- * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
- */
-function hashHas(hash, key) {
-  return nativeCreate ? hash[key] !== undefined : hasOwnProperty.call(hash, key);
-}
-
-/**
- * Sets the hash `key` to `value`.
- *
- * @private
- * @param {Object} hash The hash to modify.
- * @param {string} key The key of the value to set.
- * @param {*} value The value to set.
- */
-function hashSet(hash, key, value) {
-  hash[key] = (nativeCreate && value === undefined) ? HASH_UNDEFINED : value;
-}
-
-/**
- * Creates a map cache object to store key-value pairs.
- *
- * @private
- * @constructor
- * @param {Array} [values] The values to cache.
- */
-function MapCache(values) {
-  var index = -1,
-      length = values ? values.length : 0;
-
-  this.clear();
-  while (++index < length) {
-    var entry = values[index];
-    this.set(entry[0], entry[1]);
-  }
-}
-
-/**
- * Removes all key-value entries from the map.
- *
- * @private
- * @name clear
- * @memberOf MapCache
- */
-function mapClear() {
-  this.__data__ = {
-    'hash': new Hash,
-    'map': Map ? new Map : [],
-    'string': new Hash
-  };
-}
-
-/**
- * Removes `key` and its value from the map.
- *
- * @private
- * @name delete
- * @memberOf MapCache
- * @param {string} key The key of the value to remove.
- * @returns {boolean} Returns `true` if the entry was removed, else `false`.
- */
-function mapDelete(key) {
-  var data = this.__data__;
-  if (isKeyable(key)) {
-    return hashDelete(typeof key == 'string' ? data.string : data.hash, key);
-  }
-  return Map ? data.map['delete'](key) : assocDelete(data.map, key);
-}
-
-/**
- * Gets the map value for `key`.
- *
- * @private
- * @name get
- * @memberOf MapCache
- * @param {string} key The key of the value to get.
- * @returns {*} Returns the entry value.
- */
-function mapGet(key) {
-  var data = this.__data__;
-  if (isKeyable(key)) {
-    return hashGet(typeof key == 'string' ? data.string : data.hash, key);
-  }
-  return Map ? data.map.get(key) : assocGet(data.map, key);
-}
-
-/**
- * Checks if a map value for `key` exists.
- *
- * @private
- * @name has
- * @memberOf MapCache
- * @param {string} key The key of the entry to check.
- * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
- */
-function mapHas(key) {
-  var data = this.__data__;
-  if (isKeyable(key)) {
-    return hashHas(typeof key == 'string' ? data.string : data.hash, key);
-  }
-  return Map ? data.map.has(key) : assocHas(data.map, key);
-}
-
-/**
- * Sets the map `key` to `value`.
- *
- * @private
- * @name set
- * @memberOf MapCache
- * @param {string} key The key of the value to set.
- * @param {*} value The value to set.
- * @returns {Object} Returns the map cache object.
- */
-function mapSet(key, value) {
-  var data = this.__data__;
-  if (isKeyable(key)) {
-    hashSet(typeof key == 'string' ? data.string : data.hash, key, value);
-  } else if (Map) {
-    data.map.set(key, value);
-  } else {
-    assocSet(data.map, key, value);
-  }
-  return this;
-}
-
-/**
- * Creates a stack cache object to store key-value pairs.
- *
- * @private
- * @constructor
- * @param {Array} [values] The values to cache.
- */
-function Stack(values) {
-  var index = -1,
-      length = values ? values.length : 0;
-
-  this.clear();
-  while (++index < length) {
-    var entry = values[index];
-    this.set(entry[0], entry[1]);
-  }
-}
-
-/**
- * Removes all key-value entries from the stack.
- *
- * @private
- * @name clear
- * @memberOf Stack
- */
-function stackClear() {
-  this.__data__ = { 'array': [], 'map': null };
-}
-
-/**
- * Removes `key` and its value from the stack.
- *
- * @private
- * @name delete
- * @memberOf Stack
- * @param {string} key The key of the value to remove.
- * @returns {boolean} Returns `true` if the entry was removed, else `false`.
- */
-function stackDelete(key) {
-  var data = this.__data__,
-      array = data.array;
-
-  return array ? assocDelete(array, key) : data.map['delete'](key);
-}
-
-/**
- * Gets the stack value for `key`.
- *
- * @private
- * @name get
- * @memberOf Stack
- * @param {string} key The key of the value to get.
- * @returns {*} Returns the entry value.
- */
-function stackGet(key) {
-  var data = this.__data__,
-      array = data.array;
-
-  return array ? assocGet(array, key) : data.map.get(key);
-}
-
-/**
- * Checks if a stack value for `key` exists.
- *
- * @private
- * @name has
- * @memberOf Stack
- * @param {string} key The key of the entry to check.
- * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
- */
-function stackHas(key) {
-  var data = this.__data__,
-      array = data.array;
-
-  return array ? assocHas(array, key) : data.map.has(key);
-}
-
-/**
- * Sets the stack `key` to `value`.
- *
- * @private
- * @name set
- * @memberOf Stack
- * @param {string} key The key of the value to set.
- * @param {*} value The value to set.
- * @returns {Object} Returns the stack cache object.
- */
-function stackSet(key, value) {
-  var data = this.__data__,
-      array = data.array;
-
-  if (array) {
-    if (array.length < (LARGE_ARRAY_SIZE - 1)) {
-      assocSet(array, key, value);
-    } else {
-      data.array = null;
-      data.map = new MapCache(array);
-    }
-  }
-  var map = data.map;
-  if (map) {
-    map.set(key, value);
-  }
-  return this;
-}
-
-/**
- * Removes `key` and its value from the associative array.
- *
- * @private
- * @param {Array} array The array to query.
- * @param {string} key The key of the value to remove.
- * @returns {boolean} Returns `true` if the entry was removed, else `false`.
- */
-function assocDelete(array, key) {
-  var index = assocIndexOf(array, key);
-  if (index < 0) {
-    return false;
-  }
-  var lastIndex = array.length - 1;
-  if (index == lastIndex) {
-    array.pop();
-  } else {
-    splice.call(array, index, 1);
-  }
-  return true;
-}
-
-/**
- * Gets the associative array value for `key`.
- *
- * @private
- * @param {Array} array The array to query.
- * @param {string} key The key of the value to get.
- * @returns {*} Returns the entry value.
- */
-function assocGet(array, key) {
-  var index = assocIndexOf(array, key);
-  return index < 0 ? undefined : array[index][1];
-}
-
-/**
- * Checks if an associative array value for `key` exists.
- *
- * @private
- * @param {Array} array The array to query.
- * @param {string} key The key of the entry to check.
- * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
- */
-function assocHas(array, key) {
-  return assocIndexOf(array, key) > -1;
-}
-
-/**
- * Gets the index at which the first occurrence of `key` is found in `array`
- * of key-value pairs.
- *
- * @private
- * @param {Array} array The array to search.
- * @param {*} key The key to search for.
- * @returns {number} Returns the index of the matched value, else `-1`.
- */
-function assocIndexOf(array, key) {
-  var length = array.length;
-  while (length--) {
-    if (eq(array[length][0], key)) {
-      return length;
-    }
-  }
-  return -1;
-}
-
-/**
- * Sets the associative array `key` to `value`.
- *
- * @private
- * @param {Array} array The array to modify.
- * @param {string} key The key of the value to set.
- * @param {*} value The value to set.
- */
-function assocSet(array, key, value) {
-  var index = assocIndexOf(array, key);
-  if (index < 0) {
-    array.push([key, value]);
-  } else {
-    array[index][1] = value;
-  }
-}
-
-/**
- * Gets the native function at `key` of `object`.
- *
- * @private
- * @param {Object} object The object to query.
- * @param {string} key The key of the method to get.
- * @returns {*} Returns the function if it's native, else `undefined`.
- */
-function getNative(object, key) {
-  var value = object == null ? undefined : object[key];
-  return isNative(value) ? value : undefined;
-}
-
-/**
- * Checks if `value` is suitable for use as unique object key.
- *
- * @private
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is suitable, else `false`.
- */
-function isKeyable(value) {
-  var type = typeof value;
-  return type == 'number' || type == 'boolean' ||
-    (type == 'string' && value != '__proto__') || value == null;
-}
-
-/**
- * Performs a [`SameValueZero`](http://ecma-international.org/ecma-262/6.0/#sec-samevaluezero)
- * comparison between two values to determine if they are equivalent.
- *
- * @static
- * @memberOf _
- * @category Lang
- * @param {*} value The value to compare.
- * @param {*} other The other value to compare.
- * @returns {boolean} Returns `true` if the values are equivalent, else `false`.
- * @example
- *
- * var object = { 'user': 'fred' };
- * var other = { 'user': 'fred' };
- *
- * _.eq(object, object);
- * // => true
- *
- * _.eq(object, other);
- * // => false
- *
- * _.eq('a', 'a');
- * // => true
- *
- * _.eq('a', Object('a'));
- * // => false
- *
- * _.eq(NaN, NaN);
- * // => true
- */
-function eq(value, other) {
-  return value === other || (value !== value && other !== other);
-}
-
-/**
- * Checks if `value` is classified as a `Function` object.
- *
- * @static
- * @memberOf _
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is correctly classified, else `false`.
- * @example
- *
- * _.isFunction(_);
- * // => true
- *
- * _.isFunction(/abc/);
- * // => false
- */
-function isFunction(value) {
-  // The use of `Object#toString` avoids issues with the `typeof` operator
-  // in Safari 8 which returns 'object' for typed array constructors, and
-  // PhantomJS 1.9 which returns 'function' for `NodeList` instances.
-  var tag = isObject(value) ? objectToString.call(value) : '';
-  return tag == funcTag || tag == genTag;
-}
-
-/**
- * Checks if `value` is the [language type](https://es5.github.io/#x8) of `Object`.
- * (e.g. arrays, functions, objects, regexes, `new Number(0)`, and `new String('')`)
- *
- * @static
- * @memberOf _
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is an object, else `false`.
- * @example
- *
- * _.isObject({});
- * // => true
- *
- * _.isObject([1, 2, 3]);
- * // => true
- *
- * _.isObject(_.noop);
- * // => true
- *
- * _.isObject(null);
- * // => false
- */
-function isObject(value) {
-  var type = typeof value;
-  return !!value && (type == 'object' || type == 'function');
-}
-
-/**
- * Checks if `value` is object-like. A value is object-like if it's not `null`
- * and has a `typeof` result of "object".
- *
- * @static
- * @memberOf _
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is object-like, else `false`.
- * @example
- *
- * _.isObjectLike({});
- * // => true
- *
- * _.isObjectLike([1, 2, 3]);
- * // => true
- *
- * _.isObjectLike(_.noop);
- * // => false
- *
- * _.isObjectLike(null);
- * // => false
- */
-function isObjectLike(value) {
-  return !!value && typeof value == 'object';
-}
-
-/**
- * Checks if `value` is a native function.
- *
- * @static
- * @memberOf _
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a native function, else `false`.
- * @example
- *
- * _.isNative(Array.prototype.push);
- * // => true
- *
- * _.isNative(_);
- * // => false
- */
-function isNative(value) {
-  if (value == null) {
-    return false;
-  }
-  if (isFunction(value)) {
-    return reIsNative.test(funcToString.call(value));
-  }
-  return isObjectLike(value) &&
-    (isHostObject(value) ? reIsNative : reIsHostCtor).test(value);
-}
-
-// Avoid inheriting from `Object.prototype` when possible.
-Hash.prototype = nativeCreate ? nativeCreate(null) : objectProto;
-
-// Add functions to the `MapCache`.
-MapCache.prototype.clear = mapClear;
-MapCache.prototype['delete'] = mapDelete;
-MapCache.prototype.get = mapGet;
-MapCache.prototype.has = mapHas;
-MapCache.prototype.set = mapSet;
-
-// Add functions to the `Stack` cache.
-Stack.prototype.clear = stackClear;
-Stack.prototype['delete'] = stackDelete;
-Stack.prototype.get = stackGet;
-Stack.prototype.has = stackHas;
-Stack.prototype.set = stackSet;
-
-module.exports = Stack;
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],15:[function(require,module,exports){
-/**
- * lodash 4.1.0 (Custom Build) <https://lodash.com/>
- * Build: `lodash modularize exports="npm" -o ./`
- * Copyright 2012-2016 The Dojo Foundation <http://dojofoundation.org/>
- * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
- * Copyright 2009-2016 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
- * Available under MIT license <https://lodash.com/license>
- */
-var Stack = require('lodash._stack'),
-    keys = require('lodash.keys'),
-    root = require('lodash._root');
-
-/** Used to compose bitmasks for comparison styles. */
-var UNORDERED_COMPARE_FLAG = 1,
-    PARTIAL_COMPARE_FLAG = 2;
+/** Used to compose bitmasks for value comparisons. */
+var COMPARE_PARTIAL_FLAG = 1,
+    COMPARE_UNORDERED_FLAG = 2;
 
 /** Used as references for various `Number` constants. */
 var MAX_SAFE_INTEGER = 9007199254740991;
@@ -9791,6 +9053,7 @@ var MAX_SAFE_INTEGER = 9007199254740991;
 /** `Object#toString` result references. */
 var argsTag = '[object Arguments]',
     arrayTag = '[object Array]',
+    asyncTag = '[object AsyncFunction]',
     boolTag = '[object Boolean]',
     dateTag = '[object Date]',
     errorTag = '[object Error]',
@@ -9798,14 +9061,19 @@ var argsTag = '[object Arguments]',
     genTag = '[object GeneratorFunction]',
     mapTag = '[object Map]',
     numberTag = '[object Number]',
+    nullTag = '[object Null]',
     objectTag = '[object Object]',
+    promiseTag = '[object Promise]',
+    proxyTag = '[object Proxy]',
     regexpTag = '[object RegExp]',
     setTag = '[object Set]',
     stringTag = '[object String]',
     symbolTag = '[object Symbol]',
+    undefinedTag = '[object Undefined]',
     weakMapTag = '[object WeakMap]';
 
 var arrayBufferTag = '[object ArrayBuffer]',
+    dataViewTag = '[object DataView]',
     float32Tag = '[object Float32Array]',
     float64Tag = '[object Float64Array]',
     int8Tag = '[object Int8Array]',
@@ -9816,11 +9084,17 @@ var arrayBufferTag = '[object ArrayBuffer]',
     uint16Tag = '[object Uint16Array]',
     uint32Tag = '[object Uint32Array]';
 
-/** Used to match `RegExp` [syntax characters](http://ecma-international.org/ecma-262/6.0/#sec-patterns). */
+/**
+ * Used to match `RegExp`
+ * [syntax characters](http://ecma-international.org/ecma-262/7.0/#sec-patterns).
+ */
 var reRegExpChar = /[\\^$.*+?()[\]{}|]/g;
 
-/** Used to detect host constructors (Safari > 5). */
+/** Used to detect host constructors (Safari). */
 var reIsHostCtor = /^\[object .+?Constructor\]$/;
+
+/** Used to detect unsigned integer values. */
+var reIsUint = /^(?:0|[1-9]\d*)$/;
 
 /** Used to identify `toStringTag` values of typed arrays. */
 var typedArrayTags = {};
@@ -9831,24 +9105,100 @@ typedArrayTags[uint8ClampedTag] = typedArrayTags[uint16Tag] =
 typedArrayTags[uint32Tag] = true;
 typedArrayTags[argsTag] = typedArrayTags[arrayTag] =
 typedArrayTags[arrayBufferTag] = typedArrayTags[boolTag] =
-typedArrayTags[dateTag] = typedArrayTags[errorTag] =
-typedArrayTags[funcTag] = typedArrayTags[mapTag] =
-typedArrayTags[numberTag] = typedArrayTags[objectTag] =
-typedArrayTags[regexpTag] = typedArrayTags[setTag] =
-typedArrayTags[stringTag] = typedArrayTags[weakMapTag] = false;
+typedArrayTags[dataViewTag] = typedArrayTags[dateTag] =
+typedArrayTags[errorTag] = typedArrayTags[funcTag] =
+typedArrayTags[mapTag] = typedArrayTags[numberTag] =
+typedArrayTags[objectTag] = typedArrayTags[regexpTag] =
+typedArrayTags[setTag] = typedArrayTags[stringTag] =
+typedArrayTags[weakMapTag] = false;
+
+/** Detect free variable `global` from Node.js. */
+var freeGlobal = typeof global == 'object' && global && global.Object === Object && global;
+
+/** Detect free variable `self`. */
+var freeSelf = typeof self == 'object' && self && self.Object === Object && self;
+
+/** Used as a reference to the global object. */
+var root = freeGlobal || freeSelf || Function('return this')();
+
+/** Detect free variable `exports`. */
+var freeExports = typeof exports == 'object' && exports && !exports.nodeType && exports;
+
+/** Detect free variable `module`. */
+var freeModule = freeExports && typeof module == 'object' && module && !module.nodeType && module;
+
+/** Detect the popular CommonJS extension `module.exports`. */
+var moduleExports = freeModule && freeModule.exports === freeExports;
+
+/** Detect free variable `process` from Node.js. */
+var freeProcess = moduleExports && freeGlobal.process;
+
+/** Used to access faster Node.js helpers. */
+var nodeUtil = (function() {
+  try {
+    return freeProcess && freeProcess.binding && freeProcess.binding('util');
+  } catch (e) {}
+}());
+
+/* Node.js helper references. */
+var nodeIsTypedArray = nodeUtil && nodeUtil.isTypedArray;
+
+/**
+ * A specialized version of `_.filter` for arrays without support for
+ * iteratee shorthands.
+ *
+ * @private
+ * @param {Array} [array] The array to iterate over.
+ * @param {Function} predicate The function invoked per iteration.
+ * @returns {Array} Returns the new filtered array.
+ */
+function arrayFilter(array, predicate) {
+  var index = -1,
+      length = array == null ? 0 : array.length,
+      resIndex = 0,
+      result = [];
+
+  while (++index < length) {
+    var value = array[index];
+    if (predicate(value, index, array)) {
+      result[resIndex++] = value;
+    }
+  }
+  return result;
+}
+
+/**
+ * Appends the elements of `values` to `array`.
+ *
+ * @private
+ * @param {Array} array The array to modify.
+ * @param {Array} values The values to append.
+ * @returns {Array} Returns `array`.
+ */
+function arrayPush(array, values) {
+  var index = -1,
+      length = values.length,
+      offset = array.length;
+
+  while (++index < length) {
+    array[offset + index] = values[index];
+  }
+  return array;
+}
 
 /**
  * A specialized version of `_.some` for arrays without support for iteratee
  * shorthands.
  *
  * @private
- * @param {Array} array The array to iterate over.
+ * @param {Array} [array] The array to iterate over.
  * @param {Function} predicate The function invoked per iteration.
- * @returns {boolean} Returns `true` if any element passes the predicate check, else `false`.
+ * @returns {boolean} Returns `true` if any element passes the predicate check,
+ *  else `false`.
  */
 function arraySome(array, predicate) {
   var index = -1,
-      length = array.length;
+      length = array == null ? 0 : array.length;
 
   while (++index < length) {
     if (predicate(array[index], index, array)) {
@@ -9857,680 +9207,6 @@ function arraySome(array, predicate) {
   }
   return false;
 }
-
-/**
- * Checks if `value` is a host object in IE < 9.
- *
- * @private
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a host object, else `false`.
- */
-function isHostObject(value) {
-  // Many host objects are `Object` objects that can coerce to strings
-  // despite having improperly defined `toString` methods.
-  var result = false;
-  if (value != null && typeof value.toString != 'function') {
-    try {
-      result = !!(value + '');
-    } catch (e) {}
-  }
-  return result;
-}
-
-/**
- * Converts `map` to an array.
- *
- * @private
- * @param {Object} map The map to convert.
- * @returns {Array} Returns the converted array.
- */
-function mapToArray(map) {
-  var index = -1,
-      result = Array(map.size);
-
-  map.forEach(function(value, key) {
-    result[++index] = [key, value];
-  });
-  return result;
-}
-
-/**
- * Converts `set` to an array.
- *
- * @private
- * @param {Object} set The set to convert.
- * @returns {Array} Returns the converted array.
- */
-function setToArray(set) {
-  var index = -1,
-      result = Array(set.size);
-
-  set.forEach(function(value) {
-    result[++index] = value;
-  });
-  return result;
-}
-
-/** Used for built-in method references. */
-var objectProto = Object.prototype;
-
-/** Used to resolve the decompiled source of functions. */
-var funcToString = Function.prototype.toString;
-
-/** Used to check objects for own properties. */
-var hasOwnProperty = objectProto.hasOwnProperty;
-
-/**
- * Used to resolve the [`toStringTag`](http://ecma-international.org/ecma-262/6.0/#sec-object.prototype.tostring)
- * of values.
- */
-var objectToString = objectProto.toString;
-
-/** Used to detect if a method is native. */
-var reIsNative = RegExp('^' +
-  funcToString.call(hasOwnProperty).replace(reRegExpChar, '\\$&')
-  .replace(/hasOwnProperty|(function).*?(?=\\\()| for .+?(?=\\\])/g, '$1.*?') + '$'
-);
-
-/** Built-in value references. */
-var Symbol = root.Symbol,
-    Uint8Array = root.Uint8Array,
-    getPrototypeOf = Object.getPrototypeOf;
-
-/* Built-in method references that are verified to be native. */
-var Map = getNative(root, 'Map'),
-    Set = getNative(root, 'Set'),
-    WeakMap = getNative(root, 'WeakMap');
-
-/** Used to detect maps, sets, and weakmaps. */
-var mapCtorString = Map ? funcToString.call(Map) : '',
-    setCtorString = Set ? funcToString.call(Set) : '',
-    weakMapCtorString = WeakMap ? funcToString.call(WeakMap) : '';
-
-/** Used to convert symbols to primitives and strings. */
-var symbolProto = Symbol ? Symbol.prototype : undefined,
-    symbolValueOf = Symbol ? symbolProto.valueOf : undefined;
-
-/**
- * The base implementation of `_.has` without support for deep paths.
- *
- * @private
- * @param {Object} object The object to query.
- * @param {Array|string} key The key to check.
- * @returns {boolean} Returns `true` if `key` exists, else `false`.
- */
-function baseHas(object, key) {
-  // Avoid a bug in IE 10-11 where objects with a [[Prototype]] of `null`,
-  // that are composed entirely of index properties, return `false` for
-  // `hasOwnProperty` checks of them.
-  return hasOwnProperty.call(object, key) ||
-    (typeof object == 'object' && key in object && getPrototypeOf(object) === null);
-}
-
-/**
- * The base implementation of `_.isEqual` which supports partial comparisons
- * and tracks traversed objects.
- *
- * @private
- * @param {*} value The value to compare.
- * @param {*} other The other value to compare.
- * @param {Function} [customizer] The function to customize comparisons.
- * @param {boolean} [bitmask] The bitmask of comparison flags.
- *  The bitmask may be composed of the following flags:
- *     1 - Unordered comparison
- *     2 - Partial comparison
- * @param {Object} [stack] Tracks traversed `value` and `other` objects.
- * @returns {boolean} Returns `true` if the values are equivalent, else `false`.
- */
-function baseIsEqual(value, other, customizer, bitmask, stack) {
-  if (value === other) {
-    return true;
-  }
-  if (value == null || other == null || (!isObject(value) && !isObjectLike(other))) {
-    return value !== value && other !== other;
-  }
-  return baseIsEqualDeep(value, other, baseIsEqual, customizer, bitmask, stack);
-}
-
-/**
- * A specialized version of `baseIsEqual` for arrays and objects which performs
- * deep comparisons and tracks traversed objects enabling objects with circular
- * references to be compared.
- *
- * @private
- * @param {Object} object The object to compare.
- * @param {Object} other The other object to compare.
- * @param {Function} equalFunc The function to determine equivalents of values.
- * @param {Function} [customizer] The function to customize comparisons.
- * @param {number} [bitmask] The bitmask of comparison flags. See `baseIsEqual` for more details.
- * @param {Object} [stack] Tracks traversed `object` and `other` objects.
- * @returns {boolean} Returns `true` if the objects are equivalent, else `false`.
- */
-function baseIsEqualDeep(object, other, equalFunc, customizer, bitmask, stack) {
-  var objIsArr = isArray(object),
-      othIsArr = isArray(other),
-      objTag = arrayTag,
-      othTag = arrayTag;
-
-  if (!objIsArr) {
-    objTag = getTag(object);
-    if (objTag == argsTag) {
-      objTag = objectTag;
-    } else if (objTag != objectTag) {
-      objIsArr = isTypedArray(object);
-    }
-  }
-  if (!othIsArr) {
-    othTag = getTag(other);
-    if (othTag == argsTag) {
-      othTag = objectTag;
-    } else if (othTag != objectTag) {
-      othIsArr = isTypedArray(other);
-    }
-  }
-  var objIsObj = objTag == objectTag && !isHostObject(object),
-      othIsObj = othTag == objectTag && !isHostObject(other),
-      isSameTag = objTag == othTag;
-
-  if (isSameTag && !(objIsArr || objIsObj)) {
-    return equalByTag(object, other, objTag, equalFunc, customizer, bitmask);
-  }
-  var isPartial = bitmask & PARTIAL_COMPARE_FLAG;
-  if (!isPartial) {
-    var objIsWrapped = objIsObj && hasOwnProperty.call(object, '__wrapped__'),
-        othIsWrapped = othIsObj && hasOwnProperty.call(other, '__wrapped__');
-
-    if (objIsWrapped || othIsWrapped) {
-      return equalFunc(objIsWrapped ? object.value() : object, othIsWrapped ? other.value() : other, customizer, bitmask, stack);
-    }
-  }
-  if (!isSameTag) {
-    return false;
-  }
-  stack || (stack = new Stack);
-  return (objIsArr ? equalArrays : equalObjects)(object, other, equalFunc, customizer, bitmask, stack);
-}
-
-/**
- * A specialized version of `baseIsEqualDeep` for arrays with support for
- * partial deep comparisons.
- *
- * @private
- * @param {Array} array The array to compare.
- * @param {Array} other The other array to compare.
- * @param {Function} equalFunc The function to determine equivalents of values.
- * @param {Function} [customizer] The function to customize comparisons.
- * @param {number} [bitmask] The bitmask of comparison flags. See `baseIsEqual` for more details.
- * @param {Object} [stack] Tracks traversed `array` and `other` objects.
- * @returns {boolean} Returns `true` if the arrays are equivalent, else `false`.
- */
-function equalArrays(array, other, equalFunc, customizer, bitmask, stack) {
-  var index = -1,
-      isPartial = bitmask & PARTIAL_COMPARE_FLAG,
-      isUnordered = bitmask & UNORDERED_COMPARE_FLAG,
-      arrLength = array.length,
-      othLength = other.length;
-
-  if (arrLength != othLength && !(isPartial && othLength > arrLength)) {
-    return false;
-  }
-  // Assume cyclic values are equal.
-  var stacked = stack.get(array);
-  if (stacked) {
-    return stacked == other;
-  }
-  var result = true;
-  stack.set(array, other);
-
-  // Ignore non-index properties.
-  while (++index < arrLength) {
-    var arrValue = array[index],
-        othValue = other[index];
-
-    if (customizer) {
-      var compared = isPartial
-        ? customizer(othValue, arrValue, index, other, array, stack)
-        : customizer(arrValue, othValue, index, array, other, stack);
-    }
-    if (compared !== undefined) {
-      if (compared) {
-        continue;
-      }
-      result = false;
-      break;
-    }
-    // Recursively compare arrays (susceptible to call stack limits).
-    if (isUnordered) {
-      if (!arraySome(other, function(othValue) {
-            return arrValue === othValue || equalFunc(arrValue, othValue, customizer, bitmask, stack);
-          })) {
-        result = false;
-        break;
-      }
-    } else if (!(arrValue === othValue || equalFunc(arrValue, othValue, customizer, bitmask, stack))) {
-      result = false;
-      break;
-    }
-  }
-  stack['delete'](array);
-  return result;
-}
-
-/**
- * A specialized version of `baseIsEqualDeep` for comparing objects of
- * the same `toStringTag`.
- *
- * **Note:** This function only supports comparing values with tags of
- * `Boolean`, `Date`, `Error`, `Number`, `RegExp`, or `String`.
- *
- * @private
- * @param {Object} object The object to compare.
- * @param {Object} other The other object to compare.
- * @param {string} tag The `toStringTag` of the objects to compare.
- * @param {Function} equalFunc The function to determine equivalents of values.
- * @param {Function} [customizer] The function to customize comparisons.
- * @param {number} [bitmask] The bitmask of comparison flags. See `baseIsEqual` for more details.
- * @returns {boolean} Returns `true` if the objects are equivalent, else `false`.
- */
-function equalByTag(object, other, tag, equalFunc, customizer, bitmask) {
-  switch (tag) {
-    case arrayBufferTag:
-      if ((object.byteLength != other.byteLength) ||
-          !equalFunc(new Uint8Array(object), new Uint8Array(other))) {
-        return false;
-      }
-      return true;
-
-    case boolTag:
-    case dateTag:
-      // Coerce dates and booleans to numbers, dates to milliseconds and booleans
-      // to `1` or `0` treating invalid dates coerced to `NaN` as not equal.
-      return +object == +other;
-
-    case errorTag:
-      return object.name == other.name && object.message == other.message;
-
-    case numberTag:
-      // Treat `NaN` vs. `NaN` as equal.
-      return (object != +object) ? other != +other : object == +other;
-
-    case regexpTag:
-    case stringTag:
-      // Coerce regexes to strings and treat strings primitives and string
-      // objects as equal. See https://es5.github.io/#x15.10.6.4 for more details.
-      return object == (other + '');
-
-    case mapTag:
-      var convert = mapToArray;
-
-    case setTag:
-      var isPartial = bitmask & PARTIAL_COMPARE_FLAG;
-      convert || (convert = setToArray);
-
-      // Recursively compare objects (susceptible to call stack limits).
-      return (isPartial || object.size == other.size) &&
-        equalFunc(convert(object), convert(other), customizer, bitmask | UNORDERED_COMPARE_FLAG);
-
-    case symbolTag:
-      return !!Symbol && (symbolValueOf.call(object) == symbolValueOf.call(other));
-  }
-  return false;
-}
-
-/**
- * A specialized version of `baseIsEqualDeep` for objects with support for
- * partial deep comparisons.
- *
- * @private
- * @param {Object} object The object to compare.
- * @param {Object} other The other object to compare.
- * @param {Function} equalFunc The function to determine equivalents of values.
- * @param {Function} [customizer] The function to customize comparisons.
- * @param {number} [bitmask] The bitmask of comparison flags. See `baseIsEqual` for more details.
- * @param {Object} [stack] Tracks traversed `object` and `other` objects.
- * @returns {boolean} Returns `true` if the objects are equivalent, else `false`.
- */
-function equalObjects(object, other, equalFunc, customizer, bitmask, stack) {
-  var isPartial = bitmask & PARTIAL_COMPARE_FLAG,
-      objProps = keys(object),
-      objLength = objProps.length,
-      othProps = keys(other),
-      othLength = othProps.length;
-
-  if (objLength != othLength && !isPartial) {
-    return false;
-  }
-  var index = objLength;
-  while (index--) {
-    var key = objProps[index];
-    if (!(isPartial ? key in other : baseHas(other, key))) {
-      return false;
-    }
-  }
-  // Assume cyclic values are equal.
-  var stacked = stack.get(object);
-  if (stacked) {
-    return stacked == other;
-  }
-  var result = true;
-  stack.set(object, other);
-
-  var skipCtor = isPartial;
-  while (++index < objLength) {
-    key = objProps[index];
-    var objValue = object[key],
-        othValue = other[key];
-
-    if (customizer) {
-      var compared = isPartial
-        ? customizer(othValue, objValue, key, other, object, stack)
-        : customizer(objValue, othValue, key, object, other, stack);
-    }
-    // Recursively compare objects (susceptible to call stack limits).
-    if (!(compared === undefined
-          ? (objValue === othValue || equalFunc(objValue, othValue, customizer, bitmask, stack))
-          : compared
-        )) {
-      result = false;
-      break;
-    }
-    skipCtor || (skipCtor = key == 'constructor');
-  }
-  if (result && !skipCtor) {
-    var objCtor = object.constructor,
-        othCtor = other.constructor;
-
-    // Non `Object` object instances with different constructors are not equal.
-    if (objCtor != othCtor &&
-        ('constructor' in object && 'constructor' in other) &&
-        !(typeof objCtor == 'function' && objCtor instanceof objCtor &&
-          typeof othCtor == 'function' && othCtor instanceof othCtor)) {
-      result = false;
-    }
-  }
-  stack['delete'](object);
-  return result;
-}
-
-/**
- * Gets the native function at `key` of `object`.
- *
- * @private
- * @param {Object} object The object to query.
- * @param {string} key The key of the method to get.
- * @returns {*} Returns the function if it's native, else `undefined`.
- */
-function getNative(object, key) {
-  var value = object == null ? undefined : object[key];
-  return isNative(value) ? value : undefined;
-}
-
-/**
- * Gets the `toStringTag` of `value`.
- *
- * @private
- * @param {*} value The value to query.
- * @returns {string} Returns the `toStringTag`.
- */
-function getTag(value) {
-  return objectToString.call(value);
-}
-
-// Fallback for IE 11 providing `toStringTag` values for maps, sets, and weakmaps.
-if ((Map && getTag(new Map) != mapTag) ||
-    (Set && getTag(new Set) != setTag) ||
-    (WeakMap && getTag(new WeakMap) != weakMapTag)) {
-  getTag = function(value) {
-    var result = objectToString.call(value),
-        Ctor = result == objectTag ? value.constructor : null,
-        ctorString = typeof Ctor == 'function' ? funcToString.call(Ctor) : '';
-
-    if (ctorString) {
-      switch (ctorString) {
-        case mapCtorString: return mapTag;
-        case setCtorString: return setTag;
-        case weakMapCtorString: return weakMapTag;
-      }
-    }
-    return result;
-  };
-}
-
-/**
- * Checks if `value` is classified as an `Array` object.
- *
- * @static
- * @memberOf _
- * @type {Function}
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is correctly classified, else `false`.
- * @example
- *
- * _.isArray([1, 2, 3]);
- * // => true
- *
- * _.isArray(document.body.children);
- * // => false
- *
- * _.isArray('abc');
- * // => false
- *
- * _.isArray(_.noop);
- * // => false
- */
-var isArray = Array.isArray;
-
-/**
- * Performs a deep comparison between two values to determine if they are
- * equivalent.
- *
- * **Note:** This method supports comparing arrays, array buffers, booleans,
- * date objects, error objects, maps, numbers, `Object` objects, regexes,
- * sets, strings, symbols, and typed arrays. `Object` objects are compared
- * by their own, not inherited, enumerable properties. Functions and DOM
- * nodes are **not** supported.
- *
- * @static
- * @memberOf _
- * @category Lang
- * @param {*} value The value to compare.
- * @param {*} other The other value to compare.
- * @returns {boolean} Returns `true` if the values are equivalent, else `false`.
- * @example
- *
- * var object = { 'user': 'fred' };
- * var other = { 'user': 'fred' };
- *
- * _.isEqual(object, other);
- * // => true
- *
- * object === other;
- * // => false
- */
-function isEqual(value, other) {
-  return baseIsEqual(value, other);
-}
-
-/**
- * Checks if `value` is classified as a `Function` object.
- *
- * @static
- * @memberOf _
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is correctly classified, else `false`.
- * @example
- *
- * _.isFunction(_);
- * // => true
- *
- * _.isFunction(/abc/);
- * // => false
- */
-function isFunction(value) {
-  // The use of `Object#toString` avoids issues with the `typeof` operator
-  // in Safari 8 which returns 'object' for typed array constructors, and
-  // PhantomJS 1.9 which returns 'function' for `NodeList` instances.
-  var tag = isObject(value) ? objectToString.call(value) : '';
-  return tag == funcTag || tag == genTag;
-}
-
-/**
- * Checks if `value` is a valid array-like length.
- *
- * **Note:** This function is loosely based on [`ToLength`](http://ecma-international.org/ecma-262/6.0/#sec-tolength).
- *
- * @static
- * @memberOf _
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a valid length, else `false`.
- * @example
- *
- * _.isLength(3);
- * // => true
- *
- * _.isLength(Number.MIN_VALUE);
- * // => false
- *
- * _.isLength(Infinity);
- * // => false
- *
- * _.isLength('3');
- * // => false
- */
-function isLength(value) {
-  return typeof value == 'number' &&
-    value > -1 && value % 1 == 0 && value <= MAX_SAFE_INTEGER;
-}
-
-/**
- * Checks if `value` is the [language type](https://es5.github.io/#x8) of `Object`.
- * (e.g. arrays, functions, objects, regexes, `new Number(0)`, and `new String('')`)
- *
- * @static
- * @memberOf _
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is an object, else `false`.
- * @example
- *
- * _.isObject({});
- * // => true
- *
- * _.isObject([1, 2, 3]);
- * // => true
- *
- * _.isObject(_.noop);
- * // => true
- *
- * _.isObject(null);
- * // => false
- */
-function isObject(value) {
-  var type = typeof value;
-  return !!value && (type == 'object' || type == 'function');
-}
-
-/**
- * Checks if `value` is object-like. A value is object-like if it's not `null`
- * and has a `typeof` result of "object".
- *
- * @static
- * @memberOf _
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is object-like, else `false`.
- * @example
- *
- * _.isObjectLike({});
- * // => true
- *
- * _.isObjectLike([1, 2, 3]);
- * // => true
- *
- * _.isObjectLike(_.noop);
- * // => false
- *
- * _.isObjectLike(null);
- * // => false
- */
-function isObjectLike(value) {
-  return !!value && typeof value == 'object';
-}
-
-/**
- * Checks if `value` is a native function.
- *
- * @static
- * @memberOf _
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a native function, else `false`.
- * @example
- *
- * _.isNative(Array.prototype.push);
- * // => true
- *
- * _.isNative(_);
- * // => false
- */
-function isNative(value) {
-  if (value == null) {
-    return false;
-  }
-  if (isFunction(value)) {
-    return reIsNative.test(funcToString.call(value));
-  }
-  return isObjectLike(value) &&
-    (isHostObject(value) ? reIsNative : reIsHostCtor).test(value);
-}
-
-/**
- * Checks if `value` is classified as a typed array.
- *
- * @static
- * @memberOf _
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is correctly classified, else `false`.
- * @example
- *
- * _.isTypedArray(new Uint8Array);
- * // => true
- *
- * _.isTypedArray([]);
- * // => false
- */
-function isTypedArray(value) {
-  return isObjectLike(value) &&
-    isLength(value.length) && !!typedArrayTags[objectToString.call(value)];
-}
-
-module.exports = isEqual;
-
-},{"lodash._root":13,"lodash._stack":14,"lodash.keys":16}],16:[function(require,module,exports){
-/**
- * lodash 4.0.3 (Custom Build) <https://lodash.com/>
- * Build: `lodash modularize exports="npm" -o ./`
- * Copyright 2012-2016 The Dojo Foundation <http://dojofoundation.org/>
- * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
- * Copyright 2009-2016 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
- * Available under MIT license <https://lodash.com/license>
- */
-
-/** Used as references for various `Number` constants. */
-var MAX_SAFE_INTEGER = 9007199254740991;
-
-/** `Object#toString` result references. */
-var argsTag = '[object Arguments]',
-    funcTag = '[object Function]',
-    genTag = '[object GeneratorFunction]',
-    stringTag = '[object String]';
-
-/** Used to detect unsigned integer values. */
-var reIsUint = /^(?:0|[1-9]\d*)$/;
 
 /**
  * The base implementation of `_.times` without support for iteratee shorthands
@@ -10552,6 +9228,1200 @@ function baseTimes(n, iteratee) {
 }
 
 /**
+ * The base implementation of `_.unary` without support for storing metadata.
+ *
+ * @private
+ * @param {Function} func The function to cap arguments for.
+ * @returns {Function} Returns the new capped function.
+ */
+function baseUnary(func) {
+  return function(value) {
+    return func(value);
+  };
+}
+
+/**
+ * Checks if a `cache` value for `key` exists.
+ *
+ * @private
+ * @param {Object} cache The cache to query.
+ * @param {string} key The key of the entry to check.
+ * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
+ */
+function cacheHas(cache, key) {
+  return cache.has(key);
+}
+
+/**
+ * Gets the value at `key` of `object`.
+ *
+ * @private
+ * @param {Object} [object] The object to query.
+ * @param {string} key The key of the property to get.
+ * @returns {*} Returns the property value.
+ */
+function getValue(object, key) {
+  return object == null ? undefined : object[key];
+}
+
+/**
+ * Converts `map` to its key-value pairs.
+ *
+ * @private
+ * @param {Object} map The map to convert.
+ * @returns {Array} Returns the key-value pairs.
+ */
+function mapToArray(map) {
+  var index = -1,
+      result = Array(map.size);
+
+  map.forEach(function(value, key) {
+    result[++index] = [key, value];
+  });
+  return result;
+}
+
+/**
+ * Creates a unary function that invokes `func` with its argument transformed.
+ *
+ * @private
+ * @param {Function} func The function to wrap.
+ * @param {Function} transform The argument transform.
+ * @returns {Function} Returns the new function.
+ */
+function overArg(func, transform) {
+  return function(arg) {
+    return func(transform(arg));
+  };
+}
+
+/**
+ * Converts `set` to an array of its values.
+ *
+ * @private
+ * @param {Object} set The set to convert.
+ * @returns {Array} Returns the values.
+ */
+function setToArray(set) {
+  var index = -1,
+      result = Array(set.size);
+
+  set.forEach(function(value) {
+    result[++index] = value;
+  });
+  return result;
+}
+
+/** Used for built-in method references. */
+var arrayProto = Array.prototype,
+    funcProto = Function.prototype,
+    objectProto = Object.prototype;
+
+/** Used to detect overreaching core-js shims. */
+var coreJsData = root['__core-js_shared__'];
+
+/** Used to resolve the decompiled source of functions. */
+var funcToString = funcProto.toString;
+
+/** Used to check objects for own properties. */
+var hasOwnProperty = objectProto.hasOwnProperty;
+
+/** Used to detect methods masquerading as native. */
+var maskSrcKey = (function() {
+  var uid = /[^.]+$/.exec(coreJsData && coreJsData.keys && coreJsData.keys.IE_PROTO || '');
+  return uid ? ('Symbol(src)_1.' + uid) : '';
+}());
+
+/**
+ * Used to resolve the
+ * [`toStringTag`](http://ecma-international.org/ecma-262/7.0/#sec-object.prototype.tostring)
+ * of values.
+ */
+var nativeObjectToString = objectProto.toString;
+
+/** Used to detect if a method is native. */
+var reIsNative = RegExp('^' +
+  funcToString.call(hasOwnProperty).replace(reRegExpChar, '\\$&')
+  .replace(/hasOwnProperty|(function).*?(?=\\\()| for .+?(?=\\\])/g, '$1.*?') + '$'
+);
+
+/** Built-in value references. */
+var Buffer = moduleExports ? root.Buffer : undefined,
+    Symbol = root.Symbol,
+    Uint8Array = root.Uint8Array,
+    propertyIsEnumerable = objectProto.propertyIsEnumerable,
+    splice = arrayProto.splice,
+    symToStringTag = Symbol ? Symbol.toStringTag : undefined;
+
+/* Built-in method references for those with the same name as other `lodash` methods. */
+var nativeGetSymbols = Object.getOwnPropertySymbols,
+    nativeIsBuffer = Buffer ? Buffer.isBuffer : undefined,
+    nativeKeys = overArg(Object.keys, Object);
+
+/* Built-in method references that are verified to be native. */
+var DataView = getNative(root, 'DataView'),
+    Map = getNative(root, 'Map'),
+    Promise = getNative(root, 'Promise'),
+    Set = getNative(root, 'Set'),
+    WeakMap = getNative(root, 'WeakMap'),
+    nativeCreate = getNative(Object, 'create');
+
+/** Used to detect maps, sets, and weakmaps. */
+var dataViewCtorString = toSource(DataView),
+    mapCtorString = toSource(Map),
+    promiseCtorString = toSource(Promise),
+    setCtorString = toSource(Set),
+    weakMapCtorString = toSource(WeakMap);
+
+/** Used to convert symbols to primitives and strings. */
+var symbolProto = Symbol ? Symbol.prototype : undefined,
+    symbolValueOf = symbolProto ? symbolProto.valueOf : undefined;
+
+/**
+ * Creates a hash object.
+ *
+ * @private
+ * @constructor
+ * @param {Array} [entries] The key-value pairs to cache.
+ */
+function Hash(entries) {
+  var index = -1,
+      length = entries == null ? 0 : entries.length;
+
+  this.clear();
+  while (++index < length) {
+    var entry = entries[index];
+    this.set(entry[0], entry[1]);
+  }
+}
+
+/**
+ * Removes all key-value entries from the hash.
+ *
+ * @private
+ * @name clear
+ * @memberOf Hash
+ */
+function hashClear() {
+  this.__data__ = nativeCreate ? nativeCreate(null) : {};
+  this.size = 0;
+}
+
+/**
+ * Removes `key` and its value from the hash.
+ *
+ * @private
+ * @name delete
+ * @memberOf Hash
+ * @param {Object} hash The hash to modify.
+ * @param {string} key The key of the value to remove.
+ * @returns {boolean} Returns `true` if the entry was removed, else `false`.
+ */
+function hashDelete(key) {
+  var result = this.has(key) && delete this.__data__[key];
+  this.size -= result ? 1 : 0;
+  return result;
+}
+
+/**
+ * Gets the hash value for `key`.
+ *
+ * @private
+ * @name get
+ * @memberOf Hash
+ * @param {string} key The key of the value to get.
+ * @returns {*} Returns the entry value.
+ */
+function hashGet(key) {
+  var data = this.__data__;
+  if (nativeCreate) {
+    var result = data[key];
+    return result === HASH_UNDEFINED ? undefined : result;
+  }
+  return hasOwnProperty.call(data, key) ? data[key] : undefined;
+}
+
+/**
+ * Checks if a hash value for `key` exists.
+ *
+ * @private
+ * @name has
+ * @memberOf Hash
+ * @param {string} key The key of the entry to check.
+ * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
+ */
+function hashHas(key) {
+  var data = this.__data__;
+  return nativeCreate ? (data[key] !== undefined) : hasOwnProperty.call(data, key);
+}
+
+/**
+ * Sets the hash `key` to `value`.
+ *
+ * @private
+ * @name set
+ * @memberOf Hash
+ * @param {string} key The key of the value to set.
+ * @param {*} value The value to set.
+ * @returns {Object} Returns the hash instance.
+ */
+function hashSet(key, value) {
+  var data = this.__data__;
+  this.size += this.has(key) ? 0 : 1;
+  data[key] = (nativeCreate && value === undefined) ? HASH_UNDEFINED : value;
+  return this;
+}
+
+// Add methods to `Hash`.
+Hash.prototype.clear = hashClear;
+Hash.prototype['delete'] = hashDelete;
+Hash.prototype.get = hashGet;
+Hash.prototype.has = hashHas;
+Hash.prototype.set = hashSet;
+
+/**
+ * Creates an list cache object.
+ *
+ * @private
+ * @constructor
+ * @param {Array} [entries] The key-value pairs to cache.
+ */
+function ListCache(entries) {
+  var index = -1,
+      length = entries == null ? 0 : entries.length;
+
+  this.clear();
+  while (++index < length) {
+    var entry = entries[index];
+    this.set(entry[0], entry[1]);
+  }
+}
+
+/**
+ * Removes all key-value entries from the list cache.
+ *
+ * @private
+ * @name clear
+ * @memberOf ListCache
+ */
+function listCacheClear() {
+  this.__data__ = [];
+  this.size = 0;
+}
+
+/**
+ * Removes `key` and its value from the list cache.
+ *
+ * @private
+ * @name delete
+ * @memberOf ListCache
+ * @param {string} key The key of the value to remove.
+ * @returns {boolean} Returns `true` if the entry was removed, else `false`.
+ */
+function listCacheDelete(key) {
+  var data = this.__data__,
+      index = assocIndexOf(data, key);
+
+  if (index < 0) {
+    return false;
+  }
+  var lastIndex = data.length - 1;
+  if (index == lastIndex) {
+    data.pop();
+  } else {
+    splice.call(data, index, 1);
+  }
+  --this.size;
+  return true;
+}
+
+/**
+ * Gets the list cache value for `key`.
+ *
+ * @private
+ * @name get
+ * @memberOf ListCache
+ * @param {string} key The key of the value to get.
+ * @returns {*} Returns the entry value.
+ */
+function listCacheGet(key) {
+  var data = this.__data__,
+      index = assocIndexOf(data, key);
+
+  return index < 0 ? undefined : data[index][1];
+}
+
+/**
+ * Checks if a list cache value for `key` exists.
+ *
+ * @private
+ * @name has
+ * @memberOf ListCache
+ * @param {string} key The key of the entry to check.
+ * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
+ */
+function listCacheHas(key) {
+  return assocIndexOf(this.__data__, key) > -1;
+}
+
+/**
+ * Sets the list cache `key` to `value`.
+ *
+ * @private
+ * @name set
+ * @memberOf ListCache
+ * @param {string} key The key of the value to set.
+ * @param {*} value The value to set.
+ * @returns {Object} Returns the list cache instance.
+ */
+function listCacheSet(key, value) {
+  var data = this.__data__,
+      index = assocIndexOf(data, key);
+
+  if (index < 0) {
+    ++this.size;
+    data.push([key, value]);
+  } else {
+    data[index][1] = value;
+  }
+  return this;
+}
+
+// Add methods to `ListCache`.
+ListCache.prototype.clear = listCacheClear;
+ListCache.prototype['delete'] = listCacheDelete;
+ListCache.prototype.get = listCacheGet;
+ListCache.prototype.has = listCacheHas;
+ListCache.prototype.set = listCacheSet;
+
+/**
+ * Creates a map cache object to store key-value pairs.
+ *
+ * @private
+ * @constructor
+ * @param {Array} [entries] The key-value pairs to cache.
+ */
+function MapCache(entries) {
+  var index = -1,
+      length = entries == null ? 0 : entries.length;
+
+  this.clear();
+  while (++index < length) {
+    var entry = entries[index];
+    this.set(entry[0], entry[1]);
+  }
+}
+
+/**
+ * Removes all key-value entries from the map.
+ *
+ * @private
+ * @name clear
+ * @memberOf MapCache
+ */
+function mapCacheClear() {
+  this.size = 0;
+  this.__data__ = {
+    'hash': new Hash,
+    'map': new (Map || ListCache),
+    'string': new Hash
+  };
+}
+
+/**
+ * Removes `key` and its value from the map.
+ *
+ * @private
+ * @name delete
+ * @memberOf MapCache
+ * @param {string} key The key of the value to remove.
+ * @returns {boolean} Returns `true` if the entry was removed, else `false`.
+ */
+function mapCacheDelete(key) {
+  var result = getMapData(this, key)['delete'](key);
+  this.size -= result ? 1 : 0;
+  return result;
+}
+
+/**
+ * Gets the map value for `key`.
+ *
+ * @private
+ * @name get
+ * @memberOf MapCache
+ * @param {string} key The key of the value to get.
+ * @returns {*} Returns the entry value.
+ */
+function mapCacheGet(key) {
+  return getMapData(this, key).get(key);
+}
+
+/**
+ * Checks if a map value for `key` exists.
+ *
+ * @private
+ * @name has
+ * @memberOf MapCache
+ * @param {string} key The key of the entry to check.
+ * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
+ */
+function mapCacheHas(key) {
+  return getMapData(this, key).has(key);
+}
+
+/**
+ * Sets the map `key` to `value`.
+ *
+ * @private
+ * @name set
+ * @memberOf MapCache
+ * @param {string} key The key of the value to set.
+ * @param {*} value The value to set.
+ * @returns {Object} Returns the map cache instance.
+ */
+function mapCacheSet(key, value) {
+  var data = getMapData(this, key),
+      size = data.size;
+
+  data.set(key, value);
+  this.size += data.size == size ? 0 : 1;
+  return this;
+}
+
+// Add methods to `MapCache`.
+MapCache.prototype.clear = mapCacheClear;
+MapCache.prototype['delete'] = mapCacheDelete;
+MapCache.prototype.get = mapCacheGet;
+MapCache.prototype.has = mapCacheHas;
+MapCache.prototype.set = mapCacheSet;
+
+/**
+ *
+ * Creates an array cache object to store unique values.
+ *
+ * @private
+ * @constructor
+ * @param {Array} [values] The values to cache.
+ */
+function SetCache(values) {
+  var index = -1,
+      length = values == null ? 0 : values.length;
+
+  this.__data__ = new MapCache;
+  while (++index < length) {
+    this.add(values[index]);
+  }
+}
+
+/**
+ * Adds `value` to the array cache.
+ *
+ * @private
+ * @name add
+ * @memberOf SetCache
+ * @alias push
+ * @param {*} value The value to cache.
+ * @returns {Object} Returns the cache instance.
+ */
+function setCacheAdd(value) {
+  this.__data__.set(value, HASH_UNDEFINED);
+  return this;
+}
+
+/**
+ * Checks if `value` is in the array cache.
+ *
+ * @private
+ * @name has
+ * @memberOf SetCache
+ * @param {*} value The value to search for.
+ * @returns {number} Returns `true` if `value` is found, else `false`.
+ */
+function setCacheHas(value) {
+  return this.__data__.has(value);
+}
+
+// Add methods to `SetCache`.
+SetCache.prototype.add = SetCache.prototype.push = setCacheAdd;
+SetCache.prototype.has = setCacheHas;
+
+/**
+ * Creates a stack cache object to store key-value pairs.
+ *
+ * @private
+ * @constructor
+ * @param {Array} [entries] The key-value pairs to cache.
+ */
+function Stack(entries) {
+  var data = this.__data__ = new ListCache(entries);
+  this.size = data.size;
+}
+
+/**
+ * Removes all key-value entries from the stack.
+ *
+ * @private
+ * @name clear
+ * @memberOf Stack
+ */
+function stackClear() {
+  this.__data__ = new ListCache;
+  this.size = 0;
+}
+
+/**
+ * Removes `key` and its value from the stack.
+ *
+ * @private
+ * @name delete
+ * @memberOf Stack
+ * @param {string} key The key of the value to remove.
+ * @returns {boolean} Returns `true` if the entry was removed, else `false`.
+ */
+function stackDelete(key) {
+  var data = this.__data__,
+      result = data['delete'](key);
+
+  this.size = data.size;
+  return result;
+}
+
+/**
+ * Gets the stack value for `key`.
+ *
+ * @private
+ * @name get
+ * @memberOf Stack
+ * @param {string} key The key of the value to get.
+ * @returns {*} Returns the entry value.
+ */
+function stackGet(key) {
+  return this.__data__.get(key);
+}
+
+/**
+ * Checks if a stack value for `key` exists.
+ *
+ * @private
+ * @name has
+ * @memberOf Stack
+ * @param {string} key The key of the entry to check.
+ * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
+ */
+function stackHas(key) {
+  return this.__data__.has(key);
+}
+
+/**
+ * Sets the stack `key` to `value`.
+ *
+ * @private
+ * @name set
+ * @memberOf Stack
+ * @param {string} key The key of the value to set.
+ * @param {*} value The value to set.
+ * @returns {Object} Returns the stack cache instance.
+ */
+function stackSet(key, value) {
+  var data = this.__data__;
+  if (data instanceof ListCache) {
+    var pairs = data.__data__;
+    if (!Map || (pairs.length < LARGE_ARRAY_SIZE - 1)) {
+      pairs.push([key, value]);
+      this.size = ++data.size;
+      return this;
+    }
+    data = this.__data__ = new MapCache(pairs);
+  }
+  data.set(key, value);
+  this.size = data.size;
+  return this;
+}
+
+// Add methods to `Stack`.
+Stack.prototype.clear = stackClear;
+Stack.prototype['delete'] = stackDelete;
+Stack.prototype.get = stackGet;
+Stack.prototype.has = stackHas;
+Stack.prototype.set = stackSet;
+
+/**
+ * Creates an array of the enumerable property names of the array-like `value`.
+ *
+ * @private
+ * @param {*} value The value to query.
+ * @param {boolean} inherited Specify returning inherited property names.
+ * @returns {Array} Returns the array of property names.
+ */
+function arrayLikeKeys(value, inherited) {
+  var isArr = isArray(value),
+      isArg = !isArr && isArguments(value),
+      isBuff = !isArr && !isArg && isBuffer(value),
+      isType = !isArr && !isArg && !isBuff && isTypedArray(value),
+      skipIndexes = isArr || isArg || isBuff || isType,
+      result = skipIndexes ? baseTimes(value.length, String) : [],
+      length = result.length;
+
+  for (var key in value) {
+    if ((inherited || hasOwnProperty.call(value, key)) &&
+        !(skipIndexes && (
+           // Safari 9 has enumerable `arguments.length` in strict mode.
+           key == 'length' ||
+           // Node.js 0.10 has enumerable non-index properties on buffers.
+           (isBuff && (key == 'offset' || key == 'parent')) ||
+           // PhantomJS 2 has enumerable non-index properties on typed arrays.
+           (isType && (key == 'buffer' || key == 'byteLength' || key == 'byteOffset')) ||
+           // Skip index properties.
+           isIndex(key, length)
+        ))) {
+      result.push(key);
+    }
+  }
+  return result;
+}
+
+/**
+ * Gets the index at which the `key` is found in `array` of key-value pairs.
+ *
+ * @private
+ * @param {Array} array The array to inspect.
+ * @param {*} key The key to search for.
+ * @returns {number} Returns the index of the matched value, else `-1`.
+ */
+function assocIndexOf(array, key) {
+  var length = array.length;
+  while (length--) {
+    if (eq(array[length][0], key)) {
+      return length;
+    }
+  }
+  return -1;
+}
+
+/**
+ * The base implementation of `getAllKeys` and `getAllKeysIn` which uses
+ * `keysFunc` and `symbolsFunc` to get the enumerable property names and
+ * symbols of `object`.
+ *
+ * @private
+ * @param {Object} object The object to query.
+ * @param {Function} keysFunc The function to get the keys of `object`.
+ * @param {Function} symbolsFunc The function to get the symbols of `object`.
+ * @returns {Array} Returns the array of property names and symbols.
+ */
+function baseGetAllKeys(object, keysFunc, symbolsFunc) {
+  var result = keysFunc(object);
+  return isArray(object) ? result : arrayPush(result, symbolsFunc(object));
+}
+
+/**
+ * The base implementation of `getTag` without fallbacks for buggy environments.
+ *
+ * @private
+ * @param {*} value The value to query.
+ * @returns {string} Returns the `toStringTag`.
+ */
+function baseGetTag(value) {
+  if (value == null) {
+    return value === undefined ? undefinedTag : nullTag;
+  }
+  return (symToStringTag && symToStringTag in Object(value))
+    ? getRawTag(value)
+    : objectToString(value);
+}
+
+/**
+ * The base implementation of `_.isArguments`.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is an `arguments` object,
+ */
+function baseIsArguments(value) {
+  return isObjectLike(value) && baseGetTag(value) == argsTag;
+}
+
+/**
+ * The base implementation of `_.isEqual` which supports partial comparisons
+ * and tracks traversed objects.
+ *
+ * @private
+ * @param {*} value The value to compare.
+ * @param {*} other The other value to compare.
+ * @param {boolean} bitmask The bitmask flags.
+ *  1 - Unordered comparison
+ *  2 - Partial comparison
+ * @param {Function} [customizer] The function to customize comparisons.
+ * @param {Object} [stack] Tracks traversed `value` and `other` objects.
+ * @returns {boolean} Returns `true` if the values are equivalent, else `false`.
+ */
+function baseIsEqual(value, other, bitmask, customizer, stack) {
+  if (value === other) {
+    return true;
+  }
+  if (value == null || other == null || (!isObjectLike(value) && !isObjectLike(other))) {
+    return value !== value && other !== other;
+  }
+  return baseIsEqualDeep(value, other, bitmask, customizer, baseIsEqual, stack);
+}
+
+/**
+ * A specialized version of `baseIsEqual` for arrays and objects which performs
+ * deep comparisons and tracks traversed objects enabling objects with circular
+ * references to be compared.
+ *
+ * @private
+ * @param {Object} object The object to compare.
+ * @param {Object} other The other object to compare.
+ * @param {number} bitmask The bitmask flags. See `baseIsEqual` for more details.
+ * @param {Function} customizer The function to customize comparisons.
+ * @param {Function} equalFunc The function to determine equivalents of values.
+ * @param {Object} [stack] Tracks traversed `object` and `other` objects.
+ * @returns {boolean} Returns `true` if the objects are equivalent, else `false`.
+ */
+function baseIsEqualDeep(object, other, bitmask, customizer, equalFunc, stack) {
+  var objIsArr = isArray(object),
+      othIsArr = isArray(other),
+      objTag = objIsArr ? arrayTag : getTag(object),
+      othTag = othIsArr ? arrayTag : getTag(other);
+
+  objTag = objTag == argsTag ? objectTag : objTag;
+  othTag = othTag == argsTag ? objectTag : othTag;
+
+  var objIsObj = objTag == objectTag,
+      othIsObj = othTag == objectTag,
+      isSameTag = objTag == othTag;
+
+  if (isSameTag && isBuffer(object)) {
+    if (!isBuffer(other)) {
+      return false;
+    }
+    objIsArr = true;
+    objIsObj = false;
+  }
+  if (isSameTag && !objIsObj) {
+    stack || (stack = new Stack);
+    return (objIsArr || isTypedArray(object))
+      ? equalArrays(object, other, bitmask, customizer, equalFunc, stack)
+      : equalByTag(object, other, objTag, bitmask, customizer, equalFunc, stack);
+  }
+  if (!(bitmask & COMPARE_PARTIAL_FLAG)) {
+    var objIsWrapped = objIsObj && hasOwnProperty.call(object, '__wrapped__'),
+        othIsWrapped = othIsObj && hasOwnProperty.call(other, '__wrapped__');
+
+    if (objIsWrapped || othIsWrapped) {
+      var objUnwrapped = objIsWrapped ? object.value() : object,
+          othUnwrapped = othIsWrapped ? other.value() : other;
+
+      stack || (stack = new Stack);
+      return equalFunc(objUnwrapped, othUnwrapped, bitmask, customizer, stack);
+    }
+  }
+  if (!isSameTag) {
+    return false;
+  }
+  stack || (stack = new Stack);
+  return equalObjects(object, other, bitmask, customizer, equalFunc, stack);
+}
+
+/**
+ * The base implementation of `_.isNative` without bad shim checks.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a native function,
+ *  else `false`.
+ */
+function baseIsNative(value) {
+  if (!isObject(value) || isMasked(value)) {
+    return false;
+  }
+  var pattern = isFunction(value) ? reIsNative : reIsHostCtor;
+  return pattern.test(toSource(value));
+}
+
+/**
+ * The base implementation of `_.isTypedArray` without Node.js optimizations.
+ *
+ * @private
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is a typed array, else `false`.
+ */
+function baseIsTypedArray(value) {
+  return isObjectLike(value) &&
+    isLength(value.length) && !!typedArrayTags[baseGetTag(value)];
+}
+
+/**
+ * The base implementation of `_.keys` which doesn't treat sparse arrays as dense.
+ *
+ * @private
+ * @param {Object} object The object to query.
+ * @returns {Array} Returns the array of property names.
+ */
+function baseKeys(object) {
+  if (!isPrototype(object)) {
+    return nativeKeys(object);
+  }
+  var result = [];
+  for (var key in Object(object)) {
+    if (hasOwnProperty.call(object, key) && key != 'constructor') {
+      result.push(key);
+    }
+  }
+  return result;
+}
+
+/**
+ * A specialized version of `baseIsEqualDeep` for arrays with support for
+ * partial deep comparisons.
+ *
+ * @private
+ * @param {Array} array The array to compare.
+ * @param {Array} other The other array to compare.
+ * @param {number} bitmask The bitmask flags. See `baseIsEqual` for more details.
+ * @param {Function} customizer The function to customize comparisons.
+ * @param {Function} equalFunc The function to determine equivalents of values.
+ * @param {Object} stack Tracks traversed `array` and `other` objects.
+ * @returns {boolean} Returns `true` if the arrays are equivalent, else `false`.
+ */
+function equalArrays(array, other, bitmask, customizer, equalFunc, stack) {
+  var isPartial = bitmask & COMPARE_PARTIAL_FLAG,
+      arrLength = array.length,
+      othLength = other.length;
+
+  if (arrLength != othLength && !(isPartial && othLength > arrLength)) {
+    return false;
+  }
+  // Assume cyclic values are equal.
+  var stacked = stack.get(array);
+  if (stacked && stack.get(other)) {
+    return stacked == other;
+  }
+  var index = -1,
+      result = true,
+      seen = (bitmask & COMPARE_UNORDERED_FLAG) ? new SetCache : undefined;
+
+  stack.set(array, other);
+  stack.set(other, array);
+
+  // Ignore non-index properties.
+  while (++index < arrLength) {
+    var arrValue = array[index],
+        othValue = other[index];
+
+    if (customizer) {
+      var compared = isPartial
+        ? customizer(othValue, arrValue, index, other, array, stack)
+        : customizer(arrValue, othValue, index, array, other, stack);
+    }
+    if (compared !== undefined) {
+      if (compared) {
+        continue;
+      }
+      result = false;
+      break;
+    }
+    // Recursively compare arrays (susceptible to call stack limits).
+    if (seen) {
+      if (!arraySome(other, function(othValue, othIndex) {
+            if (!cacheHas(seen, othIndex) &&
+                (arrValue === othValue || equalFunc(arrValue, othValue, bitmask, customizer, stack))) {
+              return seen.push(othIndex);
+            }
+          })) {
+        result = false;
+        break;
+      }
+    } else if (!(
+          arrValue === othValue ||
+            equalFunc(arrValue, othValue, bitmask, customizer, stack)
+        )) {
+      result = false;
+      break;
+    }
+  }
+  stack['delete'](array);
+  stack['delete'](other);
+  return result;
+}
+
+/**
+ * A specialized version of `baseIsEqualDeep` for comparing objects of
+ * the same `toStringTag`.
+ *
+ * **Note:** This function only supports comparing values with tags of
+ * `Boolean`, `Date`, `Error`, `Number`, `RegExp`, or `String`.
+ *
+ * @private
+ * @param {Object} object The object to compare.
+ * @param {Object} other The other object to compare.
+ * @param {string} tag The `toStringTag` of the objects to compare.
+ * @param {number} bitmask The bitmask flags. See `baseIsEqual` for more details.
+ * @param {Function} customizer The function to customize comparisons.
+ * @param {Function} equalFunc The function to determine equivalents of values.
+ * @param {Object} stack Tracks traversed `object` and `other` objects.
+ * @returns {boolean} Returns `true` if the objects are equivalent, else `false`.
+ */
+function equalByTag(object, other, tag, bitmask, customizer, equalFunc, stack) {
+  switch (tag) {
+    case dataViewTag:
+      if ((object.byteLength != other.byteLength) ||
+          (object.byteOffset != other.byteOffset)) {
+        return false;
+      }
+      object = object.buffer;
+      other = other.buffer;
+
+    case arrayBufferTag:
+      if ((object.byteLength != other.byteLength) ||
+          !equalFunc(new Uint8Array(object), new Uint8Array(other))) {
+        return false;
+      }
+      return true;
+
+    case boolTag:
+    case dateTag:
+    case numberTag:
+      // Coerce booleans to `1` or `0` and dates to milliseconds.
+      // Invalid dates are coerced to `NaN`.
+      return eq(+object, +other);
+
+    case errorTag:
+      return object.name == other.name && object.message == other.message;
+
+    case regexpTag:
+    case stringTag:
+      // Coerce regexes to strings and treat strings, primitives and objects,
+      // as equal. See http://www.ecma-international.org/ecma-262/7.0/#sec-regexp.prototype.tostring
+      // for more details.
+      return object == (other + '');
+
+    case mapTag:
+      var convert = mapToArray;
+
+    case setTag:
+      var isPartial = bitmask & COMPARE_PARTIAL_FLAG;
+      convert || (convert = setToArray);
+
+      if (object.size != other.size && !isPartial) {
+        return false;
+      }
+      // Assume cyclic values are equal.
+      var stacked = stack.get(object);
+      if (stacked) {
+        return stacked == other;
+      }
+      bitmask |= COMPARE_UNORDERED_FLAG;
+
+      // Recursively compare objects (susceptible to call stack limits).
+      stack.set(object, other);
+      var result = equalArrays(convert(object), convert(other), bitmask, customizer, equalFunc, stack);
+      stack['delete'](object);
+      return result;
+
+    case symbolTag:
+      if (symbolValueOf) {
+        return symbolValueOf.call(object) == symbolValueOf.call(other);
+      }
+  }
+  return false;
+}
+
+/**
+ * A specialized version of `baseIsEqualDeep` for objects with support for
+ * partial deep comparisons.
+ *
+ * @private
+ * @param {Object} object The object to compare.
+ * @param {Object} other The other object to compare.
+ * @param {number} bitmask The bitmask flags. See `baseIsEqual` for more details.
+ * @param {Function} customizer The function to customize comparisons.
+ * @param {Function} equalFunc The function to determine equivalents of values.
+ * @param {Object} stack Tracks traversed `object` and `other` objects.
+ * @returns {boolean} Returns `true` if the objects are equivalent, else `false`.
+ */
+function equalObjects(object, other, bitmask, customizer, equalFunc, stack) {
+  var isPartial = bitmask & COMPARE_PARTIAL_FLAG,
+      objProps = getAllKeys(object),
+      objLength = objProps.length,
+      othProps = getAllKeys(other),
+      othLength = othProps.length;
+
+  if (objLength != othLength && !isPartial) {
+    return false;
+  }
+  var index = objLength;
+  while (index--) {
+    var key = objProps[index];
+    if (!(isPartial ? key in other : hasOwnProperty.call(other, key))) {
+      return false;
+    }
+  }
+  // Assume cyclic values are equal.
+  var stacked = stack.get(object);
+  if (stacked && stack.get(other)) {
+    return stacked == other;
+  }
+  var result = true;
+  stack.set(object, other);
+  stack.set(other, object);
+
+  var skipCtor = isPartial;
+  while (++index < objLength) {
+    key = objProps[index];
+    var objValue = object[key],
+        othValue = other[key];
+
+    if (customizer) {
+      var compared = isPartial
+        ? customizer(othValue, objValue, key, other, object, stack)
+        : customizer(objValue, othValue, key, object, other, stack);
+    }
+    // Recursively compare objects (susceptible to call stack limits).
+    if (!(compared === undefined
+          ? (objValue === othValue || equalFunc(objValue, othValue, bitmask, customizer, stack))
+          : compared
+        )) {
+      result = false;
+      break;
+    }
+    skipCtor || (skipCtor = key == 'constructor');
+  }
+  if (result && !skipCtor) {
+    var objCtor = object.constructor,
+        othCtor = other.constructor;
+
+    // Non `Object` object instances with different constructors are not equal.
+    if (objCtor != othCtor &&
+        ('constructor' in object && 'constructor' in other) &&
+        !(typeof objCtor == 'function' && objCtor instanceof objCtor &&
+          typeof othCtor == 'function' && othCtor instanceof othCtor)) {
+      result = false;
+    }
+  }
+  stack['delete'](object);
+  stack['delete'](other);
+  return result;
+}
+
+/**
+ * Creates an array of own enumerable property names and symbols of `object`.
+ *
+ * @private
+ * @param {Object} object The object to query.
+ * @returns {Array} Returns the array of property names and symbols.
+ */
+function getAllKeys(object) {
+  return baseGetAllKeys(object, keys, getSymbols);
+}
+
+/**
+ * Gets the data for `map`.
+ *
+ * @private
+ * @param {Object} map The map to query.
+ * @param {string} key The reference key.
+ * @returns {*} Returns the map data.
+ */
+function getMapData(map, key) {
+  var data = map.__data__;
+  return isKeyable(key)
+    ? data[typeof key == 'string' ? 'string' : 'hash']
+    : data.map;
+}
+
+/**
+ * Gets the native function at `key` of `object`.
+ *
+ * @private
+ * @param {Object} object The object to query.
+ * @param {string} key The key of the method to get.
+ * @returns {*} Returns the function if it's native, else `undefined`.
+ */
+function getNative(object, key) {
+  var value = getValue(object, key);
+  return baseIsNative(value) ? value : undefined;
+}
+
+/**
+ * A specialized version of `baseGetTag` which ignores `Symbol.toStringTag` values.
+ *
+ * @private
+ * @param {*} value The value to query.
+ * @returns {string} Returns the raw `toStringTag`.
+ */
+function getRawTag(value) {
+  var isOwn = hasOwnProperty.call(value, symToStringTag),
+      tag = value[symToStringTag];
+
+  try {
+    value[symToStringTag] = undefined;
+    var unmasked = true;
+  } catch (e) {}
+
+  var result = nativeObjectToString.call(value);
+  if (unmasked) {
+    if (isOwn) {
+      value[symToStringTag] = tag;
+    } else {
+      delete value[symToStringTag];
+    }
+  }
+  return result;
+}
+
+/**
+ * Creates an array of the own enumerable symbols of `object`.
+ *
+ * @private
+ * @param {Object} object The object to query.
+ * @returns {Array} Returns the array of symbols.
+ */
+var getSymbols = !nativeGetSymbols ? stubArray : function(object) {
+  if (object == null) {
+    return [];
+  }
+  object = Object(object);
+  return arrayFilter(nativeGetSymbols(object), function(symbol) {
+    return propertyIsEnumerable.call(object, symbol);
+  });
+};
+
+/**
+ * Gets the `toStringTag` of `value`.
+ *
+ * @private
+ * @param {*} value The value to query.
+ * @returns {string} Returns the `toStringTag`.
+ */
+var getTag = baseGetTag;
+
+// Fallback for data views, maps, sets, and weak maps in IE 11 and promises in Node.js < 6.
+if ((DataView && getTag(new DataView(new ArrayBuffer(1))) != dataViewTag) ||
+    (Map && getTag(new Map) != mapTag) ||
+    (Promise && getTag(Promise.resolve()) != promiseTag) ||
+    (Set && getTag(new Set) != setTag) ||
+    (WeakMap && getTag(new WeakMap) != weakMapTag)) {
+  getTag = function(value) {
+    var result = baseGetTag(value),
+        Ctor = result == objectTag ? value.constructor : undefined,
+        ctorString = Ctor ? toSource(Ctor) : '';
+
+    if (ctorString) {
+      switch (ctorString) {
+        case dataViewCtorString: return dataViewTag;
+        case mapCtorString: return mapTag;
+        case promiseCtorString: return promiseTag;
+        case setCtorString: return setTag;
+        case weakMapCtorString: return weakMapTag;
+      }
+    }
+    return result;
+  };
+}
+
+/**
  * Checks if `value` is a valid array-like index.
  *
  * @private
@@ -10560,98 +10430,35 @@ function baseTimes(n, iteratee) {
  * @returns {boolean} Returns `true` if `value` is a valid index, else `false`.
  */
 function isIndex(value, length) {
-  value = (typeof value == 'number' || reIsUint.test(value)) ? +value : -1;
   length = length == null ? MAX_SAFE_INTEGER : length;
-  return value > -1 && value % 1 == 0 && value < length;
-}
-
-/** Used for built-in method references. */
-var objectProto = Object.prototype;
-
-/** Used to check objects for own properties. */
-var hasOwnProperty = objectProto.hasOwnProperty;
-
-/**
- * Used to resolve the [`toStringTag`](http://ecma-international.org/ecma-262/6.0/#sec-object.prototype.tostring)
- * of values.
- */
-var objectToString = objectProto.toString;
-
-/** Built-in value references. */
-var getPrototypeOf = Object.getPrototypeOf,
-    propertyIsEnumerable = objectProto.propertyIsEnumerable;
-
-/* Built-in method references for those with the same name as other `lodash` methods. */
-var nativeKeys = Object.keys;
-
-/**
- * The base implementation of `_.has` without support for deep paths.
- *
- * @private
- * @param {Object} object The object to query.
- * @param {Array|string} key The key to check.
- * @returns {boolean} Returns `true` if `key` exists, else `false`.
- */
-function baseHas(object, key) {
-  // Avoid a bug in IE 10-11 where objects with a [[Prototype]] of `null`,
-  // that are composed entirely of index properties, return `false` for
-  // `hasOwnProperty` checks of them.
-  return hasOwnProperty.call(object, key) ||
-    (typeof object == 'object' && key in object && getPrototypeOf(object) === null);
+  return !!length &&
+    (typeof value == 'number' || reIsUint.test(value)) &&
+    (value > -1 && value % 1 == 0 && value < length);
 }
 
 /**
- * The base implementation of `_.keys` which doesn't skip the constructor
- * property of prototypes or treat sparse arrays as dense.
+ * Checks if `value` is suitable for use as unique object key.
  *
  * @private
- * @param {Object} object The object to query.
- * @returns {Array} Returns the array of property names.
+ * @param {*} value The value to check.
+ * @returns {boolean} Returns `true` if `value` is suitable, else `false`.
  */
-function baseKeys(object) {
-  return nativeKeys(Object(object));
+function isKeyable(value) {
+  var type = typeof value;
+  return (type == 'string' || type == 'number' || type == 'symbol' || type == 'boolean')
+    ? (value !== '__proto__')
+    : (value === null);
 }
 
 /**
- * The base implementation of `_.property` without support for deep paths.
+ * Checks if `func` has its source masked.
  *
  * @private
- * @param {string} key The key of the property to get.
- * @returns {Function} Returns the new function.
+ * @param {Function} func The function to check.
+ * @returns {boolean} Returns `true` if `func` is masked, else `false`.
  */
-function baseProperty(key) {
-  return function(object) {
-    return object == null ? undefined : object[key];
-  };
-}
-
-/**
- * Gets the "length" property value of `object`.
- *
- * **Note:** This function is used to avoid a [JIT bug](https://bugs.webkit.org/show_bug.cgi?id=142792)
- * that affects Safari on at least iOS 8.1-8.3 ARM64.
- *
- * @private
- * @param {Object} object The object to query.
- * @returns {*} Returns the "length" value.
- */
-var getLength = baseProperty('length');
-
-/**
- * Creates an array of index keys for `object` values of arrays,
- * `arguments` objects, and strings, otherwise `null` is returned.
- *
- * @private
- * @param {Object} object The object to query.
- * @returns {Array|null} Returns index keys, else `null`.
- */
-function indexKeys(object) {
-  var length = object ? object.length : undefined;
-  if (isLength(length) &&
-      (isArray(object) || isString(object) || isArguments(object))) {
-    return baseTimes(length, String);
-  }
-  return null;
+function isMasked(func) {
+  return !!maskSrcKey && (maskSrcKey in func);
 }
 
 /**
@@ -10669,13 +10476,81 @@ function isPrototype(value) {
 }
 
 /**
+ * Converts `value` to a string using `Object.prototype.toString`.
+ *
+ * @private
+ * @param {*} value The value to convert.
+ * @returns {string} Returns the converted string.
+ */
+function objectToString(value) {
+  return nativeObjectToString.call(value);
+}
+
+/**
+ * Converts `func` to its source code.
+ *
+ * @private
+ * @param {Function} func The function to convert.
+ * @returns {string} Returns the source code.
+ */
+function toSource(func) {
+  if (func != null) {
+    try {
+      return funcToString.call(func);
+    } catch (e) {}
+    try {
+      return (func + '');
+    } catch (e) {}
+  }
+  return '';
+}
+
+/**
+ * Performs a
+ * [`SameValueZero`](http://ecma-international.org/ecma-262/7.0/#sec-samevaluezero)
+ * comparison between two values to determine if they are equivalent.
+ *
+ * @static
+ * @memberOf _
+ * @since 4.0.0
+ * @category Lang
+ * @param {*} value The value to compare.
+ * @param {*} other The other value to compare.
+ * @returns {boolean} Returns `true` if the values are equivalent, else `false`.
+ * @example
+ *
+ * var object = { 'a': 1 };
+ * var other = { 'a': 1 };
+ *
+ * _.eq(object, object);
+ * // => true
+ *
+ * _.eq(object, other);
+ * // => false
+ *
+ * _.eq('a', 'a');
+ * // => true
+ *
+ * _.eq('a', Object('a'));
+ * // => false
+ *
+ * _.eq(NaN, NaN);
+ * // => true
+ */
+function eq(value, other) {
+  return value === other || (value !== value && other !== other);
+}
+
+/**
  * Checks if `value` is likely an `arguments` object.
  *
  * @static
  * @memberOf _
+ * @since 0.1.0
  * @category Lang
  * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is correctly classified, else `false`.
+ * @returns {boolean} Returns `true` if `value` is an `arguments` object,
+ *  else `false`.
  * @example
  *
  * _.isArguments(function() { return arguments; }());
@@ -10684,21 +10559,20 @@ function isPrototype(value) {
  * _.isArguments([1, 2, 3]);
  * // => false
  */
-function isArguments(value) {
-  // Safari 8.1 incorrectly makes `arguments.callee` enumerable in strict mode.
-  return isArrayLikeObject(value) && hasOwnProperty.call(value, 'callee') &&
-    (!propertyIsEnumerable.call(value, 'callee') || objectToString.call(value) == argsTag);
-}
+var isArguments = baseIsArguments(function() { return arguments; }()) ? baseIsArguments : function(value) {
+  return isObjectLike(value) && hasOwnProperty.call(value, 'callee') &&
+    !propertyIsEnumerable.call(value, 'callee');
+};
 
 /**
  * Checks if `value` is classified as an `Array` object.
  *
  * @static
  * @memberOf _
- * @type {Function}
+ * @since 0.1.0
  * @category Lang
  * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is correctly classified, else `false`.
+ * @returns {boolean} Returns `true` if `value` is an array, else `false`.
  * @example
  *
  * _.isArray([1, 2, 3]);
@@ -10722,6 +10596,7 @@ var isArray = Array.isArray;
  *
  * @static
  * @memberOf _
+ * @since 4.0.0
  * @category Lang
  * @param {*} value The value to check.
  * @returns {boolean} Returns `true` if `value` is array-like, else `false`.
@@ -10740,35 +10615,58 @@ var isArray = Array.isArray;
  * // => false
  */
 function isArrayLike(value) {
-  return value != null &&
-    !(typeof value == 'function' && isFunction(value)) && isLength(getLength(value));
+  return value != null && isLength(value.length) && !isFunction(value);
 }
 
 /**
- * This method is like `_.isArrayLike` except that it also checks if `value`
- * is an object.
+ * Checks if `value` is a buffer.
  *
  * @static
  * @memberOf _
+ * @since 4.3.0
  * @category Lang
  * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is an array-like object, else `false`.
+ * @returns {boolean} Returns `true` if `value` is a buffer, else `false`.
  * @example
  *
- * _.isArrayLikeObject([1, 2, 3]);
+ * _.isBuffer(new Buffer(2));
  * // => true
  *
- * _.isArrayLikeObject(document.body.children);
- * // => true
- *
- * _.isArrayLikeObject('abc');
- * // => false
- *
- * _.isArrayLikeObject(_.noop);
+ * _.isBuffer(new Uint8Array(2));
  * // => false
  */
-function isArrayLikeObject(value) {
-  return isObjectLike(value) && isArrayLike(value);
+var isBuffer = nativeIsBuffer || stubFalse;
+
+/**
+ * Performs a deep comparison between two values to determine if they are
+ * equivalent.
+ *
+ * **Note:** This method supports comparing arrays, array buffers, booleans,
+ * date objects, error objects, maps, numbers, `Object` objects, regexes,
+ * sets, strings, symbols, and typed arrays. `Object` objects are compared
+ * by their own, not inherited, enumerable properties. Functions and DOM
+ * nodes are compared by strict equality, i.e. `===`.
+ *
+ * @static
+ * @memberOf _
+ * @since 0.1.0
+ * @category Lang
+ * @param {*} value The value to compare.
+ * @param {*} other The other value to compare.
+ * @returns {boolean} Returns `true` if the values are equivalent, else `false`.
+ * @example
+ *
+ * var object = { 'a': 1 };
+ * var other = { 'a': 1 };
+ *
+ * _.isEqual(object, other);
+ * // => true
+ *
+ * object === other;
+ * // => false
+ */
+function isEqual(value, other) {
+  return baseIsEqual(value, other);
 }
 
 /**
@@ -10776,9 +10674,10 @@ function isArrayLikeObject(value) {
  *
  * @static
  * @memberOf _
+ * @since 0.1.0
  * @category Lang
  * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is correctly classified, else `false`.
+ * @returns {boolean} Returns `true` if `value` is a function, else `false`.
  * @example
  *
  * _.isFunction(_);
@@ -10788,20 +10687,24 @@ function isArrayLikeObject(value) {
  * // => false
  */
 function isFunction(value) {
+  if (!isObject(value)) {
+    return false;
+  }
   // The use of `Object#toString` avoids issues with the `typeof` operator
-  // in Safari 8 which returns 'object' for typed array constructors, and
-  // PhantomJS 1.9 which returns 'function' for `NodeList` instances.
-  var tag = isObject(value) ? objectToString.call(value) : '';
-  return tag == funcTag || tag == genTag;
+  // in Safari 9 which returns 'object' for typed arrays and other constructors.
+  var tag = baseGetTag(value);
+  return tag == funcTag || tag == genTag || tag == asyncTag || tag == proxyTag;
 }
 
 /**
  * Checks if `value` is a valid array-like length.
  *
- * **Note:** This function is loosely based on [`ToLength`](http://ecma-international.org/ecma-262/6.0/#sec-tolength).
+ * **Note:** This method is loosely based on
+ * [`ToLength`](http://ecma-international.org/ecma-262/7.0/#sec-tolength).
  *
  * @static
  * @memberOf _
+ * @since 4.0.0
  * @category Lang
  * @param {*} value The value to check.
  * @returns {boolean} Returns `true` if `value` is a valid length, else `false`.
@@ -10825,11 +10728,13 @@ function isLength(value) {
 }
 
 /**
- * Checks if `value` is the [language type](https://es5.github.io/#x8) of `Object`.
- * (e.g. arrays, functions, objects, regexes, `new Number(0)`, and `new String('')`)
+ * Checks if `value` is the
+ * [language type](http://www.ecma-international.org/ecma-262/7.0/#sec-ecmascript-language-types)
+ * of `Object`. (e.g. arrays, functions, objects, regexes, `new Number(0)`, and `new String('')`)
  *
  * @static
  * @memberOf _
+ * @since 0.1.0
  * @category Lang
  * @param {*} value The value to check.
  * @returns {boolean} Returns `true` if `value` is an object, else `false`.
@@ -10849,7 +10754,7 @@ function isLength(value) {
  */
 function isObject(value) {
   var type = typeof value;
-  return !!value && (type == 'object' || type == 'function');
+  return value != null && (type == 'object' || type == 'function');
 }
 
 /**
@@ -10858,6 +10763,7 @@ function isObject(value) {
  *
  * @static
  * @memberOf _
+ * @since 4.0.0
  * @category Lang
  * @param {*} value The value to check.
  * @returns {boolean} Returns `true` if `value` is object-like, else `false`.
@@ -10876,38 +10782,37 @@ function isObject(value) {
  * // => false
  */
 function isObjectLike(value) {
-  return !!value && typeof value == 'object';
+  return value != null && typeof value == 'object';
 }
 
 /**
- * Checks if `value` is classified as a `String` primitive or object.
+ * Checks if `value` is classified as a typed array.
  *
  * @static
  * @memberOf _
+ * @since 3.0.0
  * @category Lang
  * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is correctly classified, else `false`.
+ * @returns {boolean} Returns `true` if `value` is a typed array, else `false`.
  * @example
  *
- * _.isString('abc');
+ * _.isTypedArray(new Uint8Array);
  * // => true
  *
- * _.isString(1);
+ * _.isTypedArray([]);
  * // => false
  */
-function isString(value) {
-  return typeof value == 'string' ||
-    (!isArray(value) && isObjectLike(value) && objectToString.call(value) == stringTag);
-}
+var isTypedArray = nodeIsTypedArray ? baseUnary(nodeIsTypedArray) : baseIsTypedArray;
 
 /**
  * Creates an array of the own enumerable property names of `object`.
  *
  * **Note:** Non-object values are coerced to objects. See the
- * [ES spec](http://ecma-international.org/ecma-262/6.0/#sec-object.keys)
+ * [ES spec](http://ecma-international.org/ecma-262/7.0/#sec-object.keys)
  * for more details.
  *
  * @static
+ * @since 0.1.0
  * @memberOf _
  * @category Object
  * @param {Object} object The object to query.
@@ -10928,28 +10833,52 @@ function isString(value) {
  * // => ['0', '1']
  */
 function keys(object) {
-  var isProto = isPrototype(object);
-  if (!(isProto || isArrayLike(object))) {
-    return baseKeys(object);
-  }
-  var indexes = indexKeys(object),
-      skipIndexes = !!indexes,
-      result = indexes || [],
-      length = result.length;
-
-  for (var key in object) {
-    if (baseHas(object, key) &&
-        !(skipIndexes && (key == 'length' || isIndex(key, length))) &&
-        !(isProto && key == 'constructor')) {
-      result.push(key);
-    }
-  }
-  return result;
+  return isArrayLike(object) ? arrayLikeKeys(object) : baseKeys(object);
 }
 
-module.exports = keys;
+/**
+ * This method returns a new empty array.
+ *
+ * @static
+ * @memberOf _
+ * @since 4.13.0
+ * @category Util
+ * @returns {Array} Returns the new empty array.
+ * @example
+ *
+ * var arrays = _.times(2, _.stubArray);
+ *
+ * console.log(arrays);
+ * // => [[], []]
+ *
+ * console.log(arrays[0] === arrays[1]);
+ * // => false
+ */
+function stubArray() {
+  return [];
+}
 
-},{}],17:[function(require,module,exports){
+/**
+ * This method returns `false`.
+ *
+ * @static
+ * @memberOf _
+ * @since 4.13.0
+ * @category Util
+ * @returns {boolean} Returns `false`.
+ * @example
+ *
+ * _.times(2, _.stubFalse);
+ * // => [false, false]
+ */
+function stubFalse() {
+  return false;
+}
+
+module.exports = isEqual;
+
+}).call(this)}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{}],13:[function(require,module,exports){
 /*
 	Ractive.js v0.7.3
 	Sat Apr 25 2015 13:52:38 GMT-0400 (EDT) - commit da40f81c660ba2f09c45a09a9c20fdd34ee36d80
@@ -27570,7 +27499,7 @@ module.exports = keys;
 }));
 
 
-},{}],18:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 /**
  * @author Eberhard Graether / http://egraether.com/
  * @author Mark Lundin / http://mark-lundin.com
@@ -28189,7 +28118,7 @@ function preventEvent( event ) { event.preventDefault(); }
 
 Trackball.prototype = Object.create(THREE.EventDispatcher.prototype);
 
-},{"three":19}],19:[function(require,module,exports){
+},{"three":15}],15:[function(require,module,exports){
 var self = self || {};// File:src/Three.js
 
 /**
@@ -64378,7 +64307,7 @@ if (typeof exports !== 'undefined') {
   this['THREE'] = THREE;
 }
 
-},{}],20:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 /**
  * @license twgl.js 0.0.42 Copyright (c) 2015, Gregg Tavares All Rights Reserved.
  * Available via the MIT license.
@@ -71627,7 +71556,28 @@ define("build/js/twgl-includer-full", function(){});
     return notrequirebecasebrowserifymessesup('main');
 }));
 
-},{}],21:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
+module.exports = extend
+
+var hasOwnProperty = Object.prototype.hasOwnProperty;
+
+function extend() {
+    var target = {}
+
+    for (var i = 0; i < arguments.length; i++) {
+        var source = arguments[i]
+
+        for (var key in source) {
+            if (hasOwnProperty.call(source, key)) {
+                target[key] = source[key]
+            }
+        }
+    }
+
+    return target
+}
+
+},{}],18:[function(require,module,exports){
 var ControlSection = require('./control-section.js').ControlSection;
 
 var BoundingControls = function(renderer, ractive) {
@@ -71678,7 +71628,7 @@ BoundingControls.prototype.toggleVisibilty = function(visible) {
 
 module.exports = BoundingControls;
 
-},{"./control-section.js":22}],22:[function(require,module,exports){
+},{"./control-section.js":19}],19:[function(require,module,exports){
 
 var ControlSection = function(ractive) {
     this.ractive = ractive;
@@ -71829,7 +71779,7 @@ ProcessControls.prototype.formatDuration = function(start, end) {
 module.exports.ControlSection = ControlSection;
 module.exports.ProcessControls = ProcessControls;
 
-},{}],23:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 var ProcessControls = require('./control-section.js').ProcessControls;
 
 var DownloadControls = function(cubeMarch, exporter, editor, ractive) {
@@ -71899,7 +71849,7 @@ DownloadControls.prototype.doneMessage = function() {
 
 module.exports = DownloadControls;
 
-},{"./control-section.js":22}],24:[function(require,module,exports){
+},{"./control-section.js":19}],21:[function(require,module,exports){
 var isEqual = require('lodash.isequal');
 
 var EditorControls = function(editor, ractive) {
@@ -72028,7 +71978,7 @@ EditorControls.prototype = {
 
 module.exports = EditorControls;
 
-},{"lodash.isequal":15}],25:[function(require,module,exports){
+},{"lodash.isequal":12}],22:[function(require,module,exports){
 var ProcessControls = require('./control-section.js').ProcessControls;
 
 var PreviewControls = function(cubeMarch, renderer, editor, ractive) {
@@ -72096,7 +72046,7 @@ PreviewControls.prototype.toggleWireframe = function(value) {
 
 module.exports = PreviewControls;
 
-},{"./control-section.js":22}],26:[function(require,module,exports){
+},{"./control-section.js":19}],23:[function(require,module,exports){
 "use strict";
 
 var twgl = require("twgl.js");
@@ -72124,6 +72074,7 @@ CubeMarch.prototype.setVolume = function(dims, bounds) {
     var size = Math.ceil(Math.sqrt(vertexCount));
     scene.resize(size, size);
     var maxSize = scene.gl.drawingBufferWidth;
+    maxSize = Math.min(maxSize, 4096); // Even though GPUs can go over this, things get weird
     // maxSize /= 2;
     // maxSize = 60;
 
@@ -72306,7 +72257,7 @@ CubeMarch.prototype.march = function(config) {
 
 module.exports = CubeMarch;
 
-},{"./scene":29,"./split-volume":30,"./worker-pool":33,"glsl-read-float":12,"twgl.js":20}],27:[function(require,module,exports){
+},{"./scene":26,"./split-volume":27,"./worker-pool":30,"glsl-read-float":9,"twgl.js":16}],24:[function(require,module,exports){
 "use strict";
 
 var CubeMarch = require("./cubemarch");
@@ -72434,7 +72385,7 @@ downloadControls.init();
 boundingControls.init();
 editorControls.init();
 
-},{"./controls/bounding-controls.js":21,"./controls/download-controls.js":23,"./controls/editor-controls.js":24,"./controls/preview-controls.js":25,"./cubemarch":26,"./renderer":28,"./stl-exporter":31,"glsl-editor":4,"glsl-editor/css":2,"glsl-editor/theme":11,"ractive":17}],28:[function(require,module,exports){
+},{"./controls/bounding-controls.js":18,"./controls/download-controls.js":20,"./controls/editor-controls.js":21,"./controls/preview-controls.js":22,"./cubemarch":23,"./renderer":25,"./stl-exporter":28,"glsl-editor":7,"glsl-editor/css":5,"glsl-editor/theme":8,"ractive":13}],25:[function(require,module,exports){
 "use strict";
 
 var THREE = require('three');
@@ -72591,7 +72542,7 @@ Renderer.prototype = {
 
 module.exports = Renderer;
 
-},{"three":19,"three.trackball":18}],29:[function(require,module,exports){
+},{"three":15,"three.trackball":14}],26:[function(require,module,exports){
 "use strict";
 
 var twgl = require("twgl.js");
@@ -72691,7 +72642,7 @@ Scene.prototype.draw = function(spec) {
 
 module.exports = Scene;
 
-},{"twgl.js":20}],30:[function(require,module,exports){
+},{"twgl.js":16}],27:[function(require,module,exports){
 
 var maxDimension = function(dims) {
     if (dims[0] > dims[1]) {
@@ -72794,7 +72745,7 @@ var splitVolume = function(volume, maxSize) {
 
 module.exports = splitVolume;
 
-},{}],31:[function(require,module,exports){
+},{}],28:[function(require,module,exports){
 "use strict";
 
 var STLWriter = require("./stl-writer");
@@ -72865,7 +72816,7 @@ STLExporter.prototype = {
 
 module.exports = STLExporter;
 
-},{"./stl-writer":32}],32:[function(require,module,exports){
+},{"./stl-writer":29}],29:[function(require,module,exports){
 
 // Cribbed from http://buildaweso.me/project/2014/10/26/writing-binary-stl-files-from-threejs-objects
 
@@ -72946,7 +72897,7 @@ STLWriter.prototype = {
 
 module.exports = STLWriter;
 
-},{"filesaver.js":1}],33:[function(require,module,exports){
+},{"filesaver.js":4}],30:[function(require,module,exports){
 
 var WorkerPool = function(filename, n) {
     this.queue = [];
@@ -73034,4 +72985,4 @@ WorkerPool.prototype.process = function(worker, job, done) {
 
 module.exports = WorkerPool;
 
-},{}]},{},[27]);
+},{}]},{},[24]);
